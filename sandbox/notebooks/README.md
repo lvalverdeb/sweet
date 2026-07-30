@@ -1,6 +1,6 @@
 # sandbox/notebooks
 
-Jupyter notebooks for interactively using what `boti_sweet_etl.Datasources`
+Jupyter notebooks for interactively using what `sweet_etl.Datasources`
 builds — currently `datacubes.ipynb`, covering `Datasources.datacube()` /
 `.data_helper()`.
 
@@ -16,10 +16,10 @@ uv sync --extra etl   # or --all-extras
 Register the workspace's own venv as a Jupyter kernel once:
 
 ```bash
-uv run python -m ipykernel install --user --name boti-sweet --display-name "boti-sweet"
+uv run python -m ipykernel install --user --name sweet --display-name "sweet"
 ```
 
-Then launch and select the "boti-sweet" kernel:
+Then launch and select the "sweet" kernel:
 
 ```bash
 uv run jupyter notebook sandbox/notebooks/

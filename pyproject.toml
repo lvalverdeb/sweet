@@ -1,5 +1,5 @@
 [project]
-name = "boti-sweet"
+name = "sweet"
 version = "0.1.0"
 description = "Deployable skeleton suite for the Boti ecosystem: concentrates global configuration and wires in optional packages (ETL, BI, ...) based on client needs."
 readme = "README.md"
@@ -8,13 +8,13 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "boti-sweet-config",
+    "sweet-config",
 ]
 
 [project.optional-dependencies]
-etl = ["boti-sweet-etl"]
-bi = ["boti-sweet-bi"]
-observability = ["boti-sweet-observability"]
+etl = ["sweet-etl"]
+bi = ["sweet-bi"]
+observability = ["sweet-observability"]
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
@@ -24,15 +24,16 @@ build-backend = "uv_build"
 members = ["packages/*"]
 
 [tool.uv.sources]
-boti-sweet-config = { workspace = true }
-boti-sweet-etl = { workspace = true }
-boti-sweet-bi = { workspace = true }
-boti-sweet-observability = { workspace = true }
-boti-sweet-dummy = { workspace = true }
+sweet-config = { workspace = true }
+sweet-etl = { workspace = true }
+sweet-bi = { workspace = true }
+sweet-observability = { workspace = true }
+sweet-dummy = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "boti-sweet-dummy",
+    "sweet-dummy",
+    "ipykernel>=7.3.0",
     "mypy>=1.14.0",
     "notebook>=7.6.1",
     "pytest>=9.0.3",
@@ -58,3 +59,5 @@ python_version = "3.13"
 strict = true
 ignore_missing_imports = true
 exclude = ["tests/", "examples/", "packages/[^/]+/tests/"]
+mypy_path = "src"
+explicit_package_bases = true

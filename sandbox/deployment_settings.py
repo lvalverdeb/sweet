@@ -1,8 +1,8 @@
 """This specific deployment's own configuration.
 
 Everything here is client-specific wiring that has no home in a generic
-`boti-sweet-*` package — except `build_datasources`, which delegates to
-`boti_sweet_etl.Datasources`: that logic was never client-specific (it
+`sweet-*` package — except `build_datasources`, which delegates to
+`sweet_etl.Datasources`: that logic was never client-specific (it
 doesn't hardcode any of this deployment's profile names), so it lives in the
 generic package, not here. What's genuinely client-specific — ETL service
 integration, routing/geo, security — has no generic shape to extract yet.
@@ -15,25 +15,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from boti_sweet_config import load_settings
 from pydantic import BaseModel, SecretStr
+from sweet_config import load_settings
 
 if TYPE_CHECKING:
-    from boti_sweet_etl import Datasources
+    from sweet_etl import Datasources
 
 
 def build_datasources(*, datasources_file: str | Path) -> Datasources:
-    # Lazy: boti-sweet-etl (and its boti-data/sqlalchemy/dask/pandas/polars
+    # Lazy: sweet-etl (and its boti-data/sqlalchemy/dask/pandas/polars
     # dependency chain) only comes with the "etl" extra, which this sandbox
     # must work without.
-    from boti_sweet_etl import Datasources
+    from sweet_etl import Datasources
 
     return Datasources(datasources_file)
 
 
 class EtlServiceSettings(BaseModel):
     """This client's own upstream ETL microservice — no generic contract to
-    build `boti-sweet-etl` support against, so it stays here."""
+    build `sweet-etl` support against, so it stays here."""
 
     etl_service_url: str | None = None
     etl_grpc_server: str | None = None

@@ -15,12 +15,12 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "boti-sweet",
-    "boti-sweet-bi",
-    "boti-sweet-config",
-    "boti-sweet-dummy",
-    "boti-sweet-etl",
-    "boti-sweet-observability",
+    "sweet",
+    "sweet-bi",
+    "sweet-config",
+    "sweet-dummy",
+    "sweet-etl",
+    "sweet-observability",
 ]
 
 [[package]]
@@ -398,27 +398,28 @@ dataframes = [
 ]
 
 [[package]]
-name = "boti-sweet"
+name = "sweet"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "boti-sweet-config" },
+    { name = "sweet-config" },
 ]
 
 [package.optional-dependencies]
 bi = [
-    { name = "boti-sweet-bi" },
+    { name = "sweet-bi" },
 ]
 etl = [
-    { name = "boti-sweet-etl" },
+    { name = "sweet-etl" },
 ]
 observability = [
-    { name = "boti-sweet-observability" },
+    { name = "sweet-observability" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "boti-sweet-dummy" },
+    { name = "sweet-dummy" },
+    { name = "ipykernel" },
     { name = "mypy" },
     { name = "notebook" },
     { name = "pytest" },
@@ -429,16 +430,17 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boti-sweet-bi", marker = "extra == 'bi'", editable = "packages/boti-sweet-bi" },
-    { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
-    { name = "boti-sweet-etl", marker = "extra == 'etl'", editable = "packages/boti-sweet-etl" },
-    { name = "boti-sweet-observability", marker = "extra == 'observability'", editable = "packages/boti-sweet-observability" },
+    { name = "sweet-bi", marker = "extra == 'bi'", editable = "packages/sweet-bi" },
+    { name = "sweet-config", editable = "packages/sweet-config" },
+    { name = "sweet-etl", marker = "extra == 'etl'", editable = "packages/sweet-etl" },
+    { name = "sweet-observability", marker = "extra == 'observability'", editable = "packages/sweet-observability" },
 ]
 provides-extras = ["etl", "bi", "observability"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "boti-sweet-dummy", editable = "packages/boti-sweet-dummy" },
+    { name = "sweet-dummy", editable = "packages/sweet-dummy" },
+    { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "mypy", specifier = ">=1.14.0" },
     { name = "notebook", specifier = ">=7.6.1" },
     { name = "pytest", specifier = ">=9.0.3" },
@@ -448,24 +450,24 @@ dev = [
 ]
 
 [[package]]
-name = "boti-sweet-bi"
+name = "sweet-bi"
 version = "0.1.0"
-source = { editable = "packages/boti-sweet-bi" }
+source = { editable = "packages/sweet-bi" }
 dependencies = [
-    { name = "boti-sweet-config" },
+    { name = "sweet-config" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
+    { name = "sweet-config", editable = "packages/sweet-config" },
     { name = "pydantic", specifier = ">=2.11" },
 ]
 
 [[package]]
-name = "boti-sweet-config"
+name = "sweet-config"
 version = "0.1.0"
-source = { editable = "packages/boti-sweet-config" }
+source = { editable = "packages/sweet-config" }
 dependencies = [
     { name = "boti" },
     { name = "pydantic" },
@@ -480,41 +482,41 @@ requires-dist = [
 ]
 
 [[package]]
-name = "boti-sweet-dummy"
+name = "sweet-dummy"
 version = "0.1.0"
-source = { editable = "packages/boti-sweet-dummy" }
+source = { editable = "packages/sweet-dummy" }
 
 [[package]]
-name = "boti-sweet-etl"
+name = "sweet-etl"
 version = "0.1.0"
-source = { editable = "packages/boti-sweet-etl" }
+source = { editable = "packages/sweet-etl" }
 dependencies = [
     { name = "boti-dask" },
     { name = "boti-data", extra = ["dataframes"] },
-    { name = "boti-sweet-config" },
+    { name = "sweet-config" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "boti-dask", specifier = ">=1.0.6,<2.0.0" },
     { name = "boti-data", extras = ["dataframes"], specifier = ">=1.3.2,<2.0.0" },
-    { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
+    { name = "sweet-config", editable = "packages/sweet-config" },
 ]
 
 [[package]]
-name = "boti-sweet-observability"
+name = "sweet-observability"
 version = "0.1.0"
-source = { editable = "packages/boti-sweet-observability" }
+source = { editable = "packages/sweet-observability" }
 dependencies = [
     { name = "boti" },
-    { name = "boti-sweet-config" },
+    { name = "sweet-config" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "boti", specifier = ">=1.0.8,<2.0.0" },
-    { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
+    { name = "sweet-config", editable = "packages/sweet-config" },
     { name = "pydantic", specifier = ">=2.11" },
 ]
 

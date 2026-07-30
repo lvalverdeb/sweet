@@ -1,11 +1,11 @@
-"""Sandbox: model what a client deployment of boti-sweet would see.
+"""Sandbox: model what a client deployment of sweet would see.
 
-Points BOTI_SWEET_CONFIG_DIR at sandbox/config/ (a stand-in for a real
+Points SWEET_CONFIG_DIR at sandbox/config/ (a stand-in for a real
 deployment's config/) instead of the repo's own config/, then prints the
 resulting settings, installed optional packages, and this deployment's own
 connection catalog / client-specific config (see deployment_settings.py).
 
-    uv sync                     # boti-sweet-dummy always comes along (dev group)
+    uv sync                     # sweet-dummy always comes along (dev group)
     uv run python sandbox/run.py
 
     uv sync --all-extras        # simulate a client that needs ETL + BI + observability
@@ -34,7 +34,7 @@ from deployment_settings import (
     load_security_settings,
 )
 
-from boti_sweet import apply_tz, get_settings, installed_packages
+from sweet import apply_tz, get_settings, installed_packages
 
 SANDBOX_CONFIG_DIR = Path(__file__).parent / "config"
 SANDBOX_ENV_FILE = SANDBOX_CONFIG_DIR / ".env"
@@ -209,7 +209,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    os.environ.setdefault("BOTI_SWEET_CONFIG_DIR", str(SANDBOX_CONFIG_DIR))
+    os.environ.setdefault("SWEET_CONFIG_DIR", str(SANDBOX_CONFIG_DIR))
     apply_tz()
     print("--- timezone ---")
     print(

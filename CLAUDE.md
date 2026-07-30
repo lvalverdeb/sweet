@@ -1,6 +1,6 @@
-# boti-sweet
+# sweet
 
-Deployable skeleton suite for the Boti ecosystem. `boti-sweet` itself concentrates
+Deployable skeleton suite for the Boti ecosystem. `sweet` itself concentrates
 global configuration and reports which optional packages a deployment has
 installed; the packages (ETL, BI, ...) are added only where a client needs them.
 This repo is a uv workspace (`[tool.uv.workspace]` in the root `pyproject.toml`):
@@ -14,7 +14,7 @@ ecosystem and are always installed in `.venv`. **Read their source first**
 (`.venv/lib/python3.13/site-packages/{boti,boti_dask,boti_data}/`) before adding
 a new abstraction here — settings loading, dotenv parsing, Dask session
 management, and ETL pipeline primitives already exist there. Reimplementing
-them in a `boti-sweet-*` package duplicates code and, for anything env/dotenv
+them in a `sweet-*` package duplicates code and, for anything env/dotenv
 related, silently drops `boti`'s security validation
 (`boti.core.security.validate_environment_bindings`: rejects NUL bytes,
 newlines, tabs, and invalid variable names).
@@ -47,9 +47,9 @@ Known building blocks worth checking before writing your own:
   `"ETL_FS_"`: its fields are already named `fs_type`/`fs_path`/..., so
   `prefix + "FS_PATH".upper()` is what produces `ETL_FS_PATH`). Neither
   `FilesystemConfig` nor `SqlDatabaseConfig` has YAML support though — they're
-  plain pydantic models — so `boti_sweet_etl.Datasources`
-  (`packages/boti-sweet-etl/src/boti_sweet_etl/datasources.py`) reads a
-  `datasources.yaml` (via `boti_sweet_config.load_yaml_defaults`) and
+  plain pydantic models — so `sweet_etl.Datasources`
+  (`packages/sweet-etl/src/sweet_etl/datasources.py`) reads a
+  `datasources.yaml` (via `sweet_config.load_yaml_defaults`) and
   constructs them directly (`FilesystemConfig(**profile)`), then registers
   them with `catalog.register_filesystem`/`register_sql`. A private-IP
   `fs_endpoint` from a YAML file still needs the same SSRF-allowlist trust
@@ -69,12 +69,12 @@ Known building blocks worth checking before writing your own:
 - `boti.core.logger.Logger.default_logger(logger_name=...)` — the
   ecosystem's structured, queue-based, PII-redacting logger. No OTEL/OTLP
   export anywhere in `boti`/`boti_data`/`boti_dask` though (checked) — that's
-  why `boti-sweet-observability`'s OTEL settings fields are typed-shape-only,
+  why `sweet-observability`'s OTEL settings fields are typed-shape-only,
   with no OpenTelemetry SDK dependency added.
 
-A `boti-sweet-*` package should be a thin, generic composition or facade over
-these — not a parallel reimplementation. `boti-sweet-config` and
-`boti-sweet-etl` under `packages/` are the reference examples: the former
+A `sweet-*` package should be a thin, generic composition or facade over
+these — not a parallel reimplementation. `sweet-config` and
+`sweet-etl` under `packages/` are the reference examples: the former
 wraps `boti.core.settings.load_dotenv_values` with a YAML-defaults layer (the
 one thing missing upstream); the latter re-exports `boti_data`'s pipeline
 primitives and `boti_dask`'s session management rather than defining its own
@@ -84,26 +84,26 @@ extract/transform/load types.
 
 `testpaths` includes `packages`, so pytest always tries to collect every
 package's tests regardless of what's currently synced. A package that is a
-client-facing extra (like `boti-sweet-etl`, and any future `boti-sweet-bi`)
+client-facing extra (like `sweet-etl`, and any future `sweet-bi`)
 must ship `packages/<name>/tests/conftest.py` with
 `pytest.importorskip("<import_name>")` so its tests skip cleanly instead of
 erroring when the extra isn't installed — see
-`packages/boti-sweet-etl/tests/conftest.py`. Packages that are always
-installed (`boti-sweet-config`, required; `boti-sweet-dummy`, dev-only) don't
+`packages/sweet-etl/tests/conftest.py`. Packages that are always
+installed (`sweet-config`, required; `sweet-dummy`, dev-only) don't
 need this. `sandbox/` is where you actually exercise both states — run it
 after `uv sync` and again after `uv sync --extra etl`.
 
-## Client-specific config has no home in a `boti-sweet-*` package
+## Client-specific config has no home in a `sweet-*` package
 
 Not every setting in a real deployment maps to something generic.
 `sandbox/deployment_settings.py` is the reference example: `datasources.yaml`
-loading (fully generic) now lives in `boti_sweet_etl.Datasources`, not here —
+loading (fully generic) now lives in `sweet_etl.Datasources`, not here —
 `deployment_settings.py` just delegates to it, and otherwise defines a few
-plain `pydantic.BaseModel`s + `boti_sweet_config.load_settings`
+plain `pydantic.BaseModel`s + `sweet_config.load_settings`
 calls for things like a client's own upstream service URL or business-domain
 config (routing, security keys, ...) that have no generic shape to extract
 yet and no second real consumer to justify generalizing for. Don't invent a
-new `boti-sweet-*` package, or add fields to an existing one's settings
+new `sweet-*` package, or add fields to an existing one's settings
 model, just to give one client's one-off config a home — model it at the
 deployment level (sandbox, or a real deployment's own settings module)
 instead, same as this file's "generalize only once there's a second real
@@ -112,7 +112,7 @@ consumer" rule for code.
 ## Commands
 
 ```bash
-uv sync                       # skeleton only: boti-sweet + boti-sweet-config
+uv sync                       # skeleton only: sweet + sweet-config
 uv sync --extra etl           # skeleton + ETL package, for clients that need it
 uv sync --extra bi            # skeleton + BI package
 uv sync --extra observability # skeleton + observability package

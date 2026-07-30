@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from boti_sweet.settings import get_settings
+from sweet.settings import get_settings
 
 
 def test_defaults_apply_when_config_dir_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("BOTI_SWEET_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("SWEET_CONFIG_DIR", str(tmp_path))
 
     settings = get_settings()
 
@@ -19,8 +19,8 @@ def test_defaults_apply_when_config_dir_is_empty(
 def test_environment_variable_overrides_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("BOTI_SWEET_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setenv("BOTI_SWEET_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SWEET_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("SWEET_LOG_LEVEL", "DEBUG")
 
     settings = get_settings()
 

@@ -1,9 +1,9 @@
 # Copy to sandbox/config/datasources.yaml (gitignored) and fill in real
 # values. Placeholders only below — never commit real credentials here.
 #
-# Loaded by boti_sweet_etl.Datasources directly into
+# Loaded by sweet_etl.Datasources directly into
 # boti.core.filesystem.FilesystemConfig / boti_data.db.sql_config.
-# SqlDatabaseConfig / boti_sweet_etl.RedisConfig — field names below must
+# SqlDatabaseConfig / sweet_etl.RedisConfig — field names below must
 # match those models' own field names.
 filesystems:
   etl:

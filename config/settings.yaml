@@ -1,4 +1,4 @@
-# Global defaults for the boti-sweet suite.
+# Global defaults for the sweet suite.
 # Override per-deployment via config/.env or process environment variables.
 environment: development
 log_level: INFO

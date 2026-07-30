@@ -1,0 +1,24 @@
+[project]
+name = "sweet-observability"
+version = "0.1.0"
+description = "Typed observability settings (OO_*) and a boti.core.logger.Logger facade for the Boti suite."
+readme = "README.md"
+authors = [
+    { name = "Luis Valverde", email = "lvalverdeb@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "boti>=1.0.8,<2.0.0",
+    "sweet-config",
+    "pydantic>=2.11",
+]
+
+[project.entry-points."sweet.packages"]
+observability = "sweet_observability"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+sweet-config = { workspace = true }

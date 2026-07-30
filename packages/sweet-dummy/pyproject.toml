@@ -1,0 +1,17 @@
+[project]
+name = "sweet-dummy"
+version = "0.1.0"
+description = "Minimal reference optional package for sweet: for local development and the sandbox, not a client deliverable."
+readme = "README.md"
+authors = [
+    { name = "Luis Valverde", email = "lvalverdeb@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.entry-points."sweet.packages"]
+dummy = "sweet_dummy"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"

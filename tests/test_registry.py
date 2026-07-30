@@ -1,9 +1,9 @@
-from boti_sweet.registry import installed_packages, is_installed
+from sweet.registry import installed_packages, is_installed
 
 
 def test_dummy_package_is_discovered_when_installed() -> None:
-    # boti-sweet-dummy is a workspace dev dependency, always present when synced
-    # (unlike boti-sweet-etl, which is an optional client-facing extra).
+    # sweet-dummy is a workspace dev dependency, always present when synced
+    # (unlike sweet-etl, which is an optional client-facing extra).
     installed_packages.cache_clear()
 
     names = {package.name for package in installed_packages()}
