@@ -12,8 +12,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from boti_data import SinkPipeline, SinkWriteResult
 from boti_dask import dask_session_from_env_prefix
+from boti_data import SinkPipeline, SinkWriteResult
 
 
 def run_with_dask_session(

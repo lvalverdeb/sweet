@@ -1,8 +1,7 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 import boti_sweet_etl.runner as runner_module
+import pytest
 from boti_sweet_etl import run_with_dask_session
 
 

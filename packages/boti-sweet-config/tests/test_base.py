@@ -1,9 +1,8 @@
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel
-
 from boti_sweet_config import load_settings
+from pydantic import BaseModel
 
 
 class _Settings(BaseModel):

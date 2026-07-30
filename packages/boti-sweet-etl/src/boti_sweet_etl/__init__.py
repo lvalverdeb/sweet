@@ -8,6 +8,7 @@ wires them for suite use.
 
 from __future__ import annotations
 
+from boti_dask import DaskSession, dask_session_from_env_prefix
 from boti_data import (
     CsvSink,
     CsvSinkConfig,
@@ -21,7 +22,6 @@ from boti_data import (
     create_sink,
     register_sink,
 )
-from boti_dask import DaskSession, dask_session_from_env_prefix
 
 from boti_sweet_etl.runner import run_with_dask_session
 
