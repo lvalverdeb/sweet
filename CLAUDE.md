@@ -37,16 +37,25 @@ Known building blocks worth checking before writing your own:
   extract-load-write pipeline framework (source = `DataHelper`/`HybridDataset`,
   sink = a `PipelineSink`).
 - `boti_data.DataGateway` / `DataHelper` — data loading (SQL, Parquet, ...).
-- `boti_data.ConnectionCatalog` (`load_filesystem`/`load_sql`) — the
-  ecosystem's mechanism for *named* connection profiles from prefixed env
-  vars (e.g. a deployment with separate `source`/`target`/`persons`
-  filesystems, or a `replica`/`paf` pair of databases). Built on
-  `boti.core.filesystem.FilesystemConfig.from_env_prefix` and
+- `boti_data.ConnectionCatalog` — the ecosystem's mechanism for *named*
+  connection profiles (e.g. a deployment with separate `source`/`target`/
+  `persons` filesystems, or a `replica`/`paf` pair of databases). Its own
+  `load_filesystem`/`load_sql` helpers read prefixed env vars
+  (`boti.core.filesystem.FilesystemConfig.from_env_prefix` /
   `boti_data.db.sql_config.SqlDatabaseConfig.from_env_prefix` — note the
-  prefix passed to `FilesystemConfig` is just the profile name (`"ETL_"`),
-  *not* `"ETL_FS_"`: its fields are already named `fs_type`/`fs_path`/...,
-  so `prefix + "FS_PATH".upper()` is what produces `ETL_FS_PATH`. See
-  `sandbox/deployment_settings.py` for a worked example.
+  prefix for `FilesystemConfig` is just the profile name, `"ETL_"`, *not*
+  `"ETL_FS_"`: its fields are already named `fs_type`/`fs_path`/..., so
+  `prefix + "FS_PATH".upper()` is what produces `ETL_FS_PATH`). Neither
+  `FilesystemConfig` nor `SqlDatabaseConfig` has YAML support though — they're
+  plain pydantic models — so `sandbox/deployment_settings.py` instead reads a
+  `datasources.yaml` (via `boti_sweet_config.load_yaml_defaults`) and
+  constructs them directly (`FilesystemConfig(**profile)`), then registers
+  them with `catalog.register_filesystem`/`register_sql`. A private-IP
+  `fs_endpoint` from a YAML file still needs the same SSRF-allowlist trust
+  `trust_env_endpoint=True` gives you on the env-prefix path — see
+  `_trust_endpoint()` there, which replicates `boti.core.filesystem`'s own
+  (private) URL-to-allowlist-key logic since there's no public helper that
+  takes a config value directly.
 - `boti.core.logger.Logger.default_logger(logger_name=...)` — the
   ecosystem's structured, queue-based, PII-redacting logger. No OTEL/OTLP
   export anywhere in `boti`/`boti_data`/`boti_dask` though (checked) — that's
@@ -76,10 +85,11 @@ after `uv sync` and again after `uv sync --extra etl`.
 
 ## Client-specific config has no home in a `boti-sweet-*` package
 
-Not every env var in a real deployment's `.env` maps to something generic.
+Not every setting in a real deployment maps to something generic.
 `sandbox/deployment_settings.py` is the reference example: it builds a
-`boti_data.ConnectionCatalog` (fully generic, zero new code needed) but also
-defines a few plain `pydantic.BaseModel`s + `boti_sweet_config.load_settings`
+`boti_data.ConnectionCatalog` from `datasources.yaml` (thin glue over fully
+generic ecosystem types, see above) but also defines a few plain
+`pydantic.BaseModel`s + `boti_sweet_config.load_settings`
 calls for things like a client's own upstream service URL or business-domain
 config (routing, security keys, ...) that have no generic shape to extract
 yet and no second real consumer to justify generalizing for. Don't invent a

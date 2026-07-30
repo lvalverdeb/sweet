@@ -11,8 +11,10 @@ connection catalog / client-specific config (see deployment_settings.py).
     uv sync --all-extras        # simulate a client that needs ETL + BI + observability
     uv run python sandbox/run.py
 
-Copy sandbox/config/.env.example to sandbox/config/.env (gitignored) and fill
-in real values to see this deployment's actual configuration resolve.
+Copy sandbox/config/.env.example to sandbox/config/.env, and
+sandbox/config/datasources.yaml.example to sandbox/config/datasources.yaml
+(both gitignored) and fill in real values to see this deployment's actual
+configuration resolve.
 
 By default this only constructs and validates typed config objects — no
 network calls. Pass --check-connectivity to additionally probe each
@@ -36,6 +38,7 @@ from boti_sweet import apply_tz, get_settings, installed_packages
 
 SANDBOX_CONFIG_DIR = Path(__file__).parent / "config"
 SANDBOX_ENV_FILE = SANDBOX_CONFIG_DIR / ".env"
+SANDBOX_DATASOURCES_FILE = SANDBOX_CONFIG_DIR / "datasources.yaml"
 
 
 def print_suite_settings() -> None:
@@ -74,7 +77,7 @@ def print_connection_catalog() -> None:
     from deployment_settings import build_connection_catalog
 
     try:
-        catalog = build_connection_catalog(env_file=SANDBOX_ENV_FILE)
+        catalog = build_connection_catalog(datasources_file=SANDBOX_DATASOURCES_FILE)
     except ImportError:
         print("  skipped: boti-data not installed (uv sync --extra etl to see this)")
         return
@@ -83,7 +86,7 @@ def print_connection_catalog() -> None:
         try:
             config = catalog.filesystem_config(name)
         except KeyError:
-            print(f"  filesystem[{name}]: not configured ({name.upper()}_FS_PATH not set)")
+            print(f"  filesystem[{name}]: not configured (missing from datasources.yaml)")
             continue
         print(f"  filesystem[{name}]: type={config.fs_type} path={config.fs_path}")
 
@@ -91,7 +94,7 @@ def print_connection_catalog() -> None:
         try:
             config = catalog.sql_config(name)
         except KeyError:
-            print(f"  sql[{name}]: not configured ({name.upper()}_DB_URL not set)")
+            print(f"  sql[{name}]: not configured (missing from datasources.yaml)")
             continue
         print(f"  sql[{name}]: query_only={config.query_only} pool_size={config.pool_size}")
 
@@ -122,7 +125,7 @@ def check_connectivity() -> None:
         print("  skipped: boti-data not installed (uv sync --extra etl to see this)")
         return
 
-    catalog = build_connection_catalog(env_file=SANDBOX_ENV_FILE)
+    catalog = build_connection_catalog(datasources_file=SANDBOX_DATASOURCES_FILE)
 
     for name in ("etl", "source", "target", "persons"):
         try:

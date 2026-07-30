@@ -10,81 +10,61 @@ service integration, routing/geo, security). See CLAUDE.md for the
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
-from boti.core.settings import load_dotenv_values
-from boti_sweet_config import load_settings
+from boti_sweet_config import load_settings, load_yaml_defaults
 from pydantic import BaseModel, SecretStr, ValidationError
 
 if TYPE_CHECKING:
     from boti_data import ConnectionCatalog
 
 
-def _resolve_env_value(name: str, *, env_file: str | Path | None) -> str | None:
-    """Look up `name`, process environment first, falling back to `env_file`.
-
-    `load_settings`/`load_prefixed_model` merge env_file + os.environ this
-    same way internally; this exists because SQL profile URLs are read
-    directly (see SQL_PROFILES below) rather than through a settings model.
+def _trust_endpoint(endpoint: str) -> None:
+    """Allowlist `endpoint`'s host[:port] so a private IP from trusted
+    deployment config (datasources.yaml) doesn't trip FilesystemConfig's SSRF
+    guard. Mirrors boti.core.filesystem's own (private) _allowlist_endpoint_from_url
+    — there's no public equivalent that takes a config value directly.
     """
-    value = os.environ.get(name)
-    if value:
-        return value
-    if env_file is not None and Path(env_file).is_file():
-        return load_dotenv_values(Path(env_file)).get(name)
-    return None
+    from boti.core.filesystem import add_endpoint_to_allowlist
 
-# name -> env prefix, one boti.core.filesystem.FilesystemConfig each.
-# FilesystemConfig's own fields are named fs_type/fs_path/... (the "FS_"
-# already lives in the field name), so the prefix here is just "ETL_", not
-# "ETL_FS_" — prefix + "FS_PATH".upper() = "ETL_" + "FS_PATH" = "ETL_FS_PATH".
-FILESYSTEM_PROFILES = {
-    "etl": "ETL_",
-    "source": "SOURCE_",
-    "target": "TARGET_",
-    "persons": "PERSONS_",
-}
-
-# name -> env var holding the full connection URL. Shared "DB_" pool tuning
-# (DB_POOL_SIZE, DB_MAX_OVERFLOW, ...) applies to every named connection;
-# REPLICA_DB_URL/PAF_DB_URL don't follow the {PREFIX}CONNECTION_URL
-# convention SqlDatabaseSettings expects, so the URL is passed as an
-# explicit override on top of that shared prefix instead.
-SQL_PROFILES = {
-    "replica": "REPLICA_DB_URL",
-    "paf": "PAF_DB_URL",
-}
+    parsed = urlparse(endpoint.strip())
+    hostname = parsed.hostname or ""
+    if not hostname:
+        return
+    key = f"{hostname}:{parsed.port}" if parsed.port else hostname
+    add_endpoint_to_allowlist(key, hostname)
 
 
-def build_connection_catalog(*, env_file: str | Path | None = None) -> ConnectionCatalog:
+def build_connection_catalog(*, datasources_file: str | Path) -> ConnectionCatalog:
     # Lazy: boti-data (and its sqlalchemy/dask/pandas/polars dependency chain)
     # only comes with the "etl" extra, which this sandbox must work without.
+    from boti.core.filesystem import FilesystemConfig
     from boti_data import ConnectionCatalog
+    from boti_data.db.sql_config import SqlDatabaseConfig
 
     catalog = ConnectionCatalog()
+    data = load_yaml_defaults(datasources_file)
 
-    for name, prefix in FILESYSTEM_PROFILES.items():
-        # fs_path is a required field with no default: a profile with none of
-        # its {PREFIX}FS_* vars set (e.g. no sandbox/config/.env yet) raises
-        # here rather than returning an empty config, so skip it explicitly —
-        # same "not configured, move on" behavior as the SQL profiles below.
+    for name, profile in data.get("filesystems", {}).items():
+        endpoint = profile.get("fs_endpoint")
+        if endpoint:
+            _trust_endpoint(endpoint)
         try:
-            catalog.load_filesystem(name, prefix, env_file=env_file, trust_env_endpoint=True)
-        except ValidationError:
-            continue
+            fs_config = FilesystemConfig(**profile)
+        except ValidationError as exc:
+            raise ValueError(f"datasources.yaml: filesystems.{name} is invalid: {exc}") from exc
+        catalog.register_filesystem(name, fs_config)
 
-    for name, url_env_var in SQL_PROFILES.items():
-        connection_url = _resolve_env_value(url_env_var, env_file=env_file)
-        if not connection_url:
-            continue
-        # query_only is already SqlDatabaseSettings' own default; written out
-        # explicitly so a future reader has to consciously change it rather
-        # than rely on an invisible default (e.g. once "paf" needs writes).
-        catalog.load_sql(
-            name, "DB_", env_file=env_file, connection_url=connection_url, query_only=True
-        )
+    sql_section = data.get("sql", {})
+    defaults = sql_section.get("defaults", {})
+    for name, profile in sql_section.get("connections", {}).items():
+        try:
+            sql_config = SqlDatabaseConfig(**{**defaults, **profile})
+        except ValidationError as exc:
+            raise ValueError(f"datasources.yaml: sql.connections.{name} is invalid: {exc}") from exc
+        catalog.register_sql(name, sql_config)
 
     return catalog
 

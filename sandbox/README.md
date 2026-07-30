@@ -7,19 +7,24 @@ real client's config or a real ETL/BI/observability package installed.
 ```
 sandbox/
 ├── config/
-│   ├── settings.yaml       # a pretend deployment's committed YAML defaults
-│   ├── .env.example        # documents every key this sandbox reads, committed
-│   └── .env                # your real values, gitignored — copy from .env.example
+│   ├── settings.yaml              # a pretend deployment's committed YAML defaults
+│   ├── .env.example               # documents every non-datasource key, committed
+│   ├── .env                       # your real values, gitignored
+│   ├── datasources.yaml.example   # documents filesystem/SQL profiles, committed
+│   └── datasources.yaml           # your real connection profiles, gitignored
 ├── deployment_settings.py  # this "deployment"'s own config: a boti_data
-│                            # ConnectionCatalog (generic) + a few ad hoc
-│                            # settings models (client-specific, see below)
+│                            # ConnectionCatalog built from datasources.yaml
+│                            # (generic) + a few ad hoc settings models loaded
+│                            # from .env (client-specific, see below)
 └── run.py                  # prints resolved settings, installed optional
                              # packages, and this deployment's connection
                              # catalog / client-specific config
 ```
 
-Copy `sandbox/config/.env.example` to `sandbox/config/.env` and fill in real
-values (this file is gitignored — **never commit it**). Then:
+Copy `sandbox/config/.env.example` to `sandbox/config/.env`, and
+`sandbox/config/datasources.yaml.example` to
+`sandbox/config/datasources.yaml`, then fill in real values (both files are
+gitignored — **never commit either**). Then:
 
 ```bash
 uv sync                          # boti-sweet-dummy is always present (workspace dev group)
@@ -41,9 +46,9 @@ filesystem/SQL connection for real:
 uv run python sandbox/run.py --check-connectivity
 ```
 
-This reaches whatever `sandbox/config/.env` points at, so expect failures
-(not crashes) for infrastructure that isn't reachable from wherever this
-runs, or for DB dialects whose driver package isn't installed (e.g.
+This reaches whatever `sandbox/config/datasources.yaml` points at, so expect
+failures (not crashes) for infrastructure that isn't reachable from wherever
+this runs, or for DB dialects whose driver package isn't installed (e.g.
 `pymysql`/`psycopg2` — install them yourself if you need this to fully
 succeed, they're deployment-specific, not a `boti-sweet-etl` dependency).
 
@@ -51,11 +56,14 @@ succeed, they're deployment-specific, not a `boti-sweet-etl` dependency).
 
 `deployment_settings.py` demonstrates both:
 
-- **Generic, zero new code**: named filesystem/SQL connection profiles via
-  `boti_data.ConnectionCatalog` — `catalog.load_filesystem("source", "SOURCE_")`,
-  `catalog.load_sql("replica", "DB_", connection_url=...)`, etc. This is the
-  ecosystem's own mechanism (see `CLAUDE.md`), not something built for this
-  sandbox.
+- **Generic, small amount of glue**: named filesystem/SQL connection profiles
+  read from `datasources.yaml` and constructed directly as
+  `boti.core.filesystem.FilesystemConfig` / `boti_data.db.sql_config.
+  SqlDatabaseConfig`, then registered into a `boti_data.ConnectionCatalog`.
+  Neither of those model classes has built-in YAML support (checked — they're
+  plain pydantic models with only env-prefix loaders), so `datasources.yaml`
+  is boti-sweet-specific glue on top of the ecosystem's own connection-profile
+  types, not something the ecosystem provides directly. See `CLAUDE.md`.
 - **Client-specific, sandbox-only**: `EtlServiceSettings`, `SecuritySettings`,
   `ExternalServicesSettings` — plain models built with
   `boti_sweet_config.load_settings()` for config that's this client's own

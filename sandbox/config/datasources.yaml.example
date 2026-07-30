@@ -1,0 +1,46 @@
+# Copy to sandbox/config/datasources.yaml (gitignored) and fill in real
+# values. Placeholders only below — never commit real credentials here.
+#
+# Loaded directly into boti.core.filesystem.FilesystemConfig /
+# boti_data.db.sql_config.SqlDatabaseConfig (see deployment_settings.py) —
+# field names below must match those models' own field names.
+filesystems:
+  etl:
+    fs_type: s3
+    fs_path: s3://dst-etl
+    fs_key:
+    fs_secret:
+    fs_endpoint:
+  source:
+    fs_type: s3
+    fs_path: s3://logistics/source
+    fs_key:
+    fs_secret:
+    fs_endpoint:
+  target:
+    fs_type: s3
+    fs_path: s3://logistics/target
+    fs_key:
+    fs_secret:
+    fs_endpoint:
+  persons:
+    fs_type: s3
+    fs_path: s3://dst-persons
+    fs_key:
+    fs_secret:
+    fs_endpoint:
+
+sql:
+  # Shared pool tuning applied to every connection below, unless a connection
+  # overrides a key itself (e.g. a future `paf: {query_only: false}`).
+  defaults:
+    pool_size: 20
+    max_overflow: 25
+    pool_timeout: 30
+    pool_recycle: 3600
+    query_only: true
+  connections:
+    replica:
+      connection_url:
+    paf:
+      connection_url:

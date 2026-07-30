@@ -13,4 +13,5 @@ build/
 CACHEDIR.TAG
 config/.env
 sandbox/config/.env
+sandbox/config/datasources.yaml
 logs/
