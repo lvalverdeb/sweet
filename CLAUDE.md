@@ -37,6 +37,16 @@ Known building blocks worth checking before writing your own:
   extract-load-write pipeline framework (source = `DataHelper`/`HybridDataset`,
   sink = a `PipelineSink`).
 - `boti_data.DataGateway` / `DataHelper` — data loading (SQL, Parquet, ...).
+- `boti_data.ConnectionCatalog` (`load_filesystem`/`load_sql`) — the
+  ecosystem's mechanism for *named* connection profiles from prefixed env
+  vars (e.g. a deployment with separate `source`/`target`/`persons`
+  filesystems, or a `replica`/`paf` pair of databases). Built on
+  `boti.core.filesystem.FilesystemConfig.from_env_prefix` and
+  `boti_data.db.sql_config.SqlDatabaseConfig.from_env_prefix` — note the
+  prefix passed to `FilesystemConfig` is just the profile name (`"ETL_"`),
+  *not* `"ETL_FS_"`: its fields are already named `fs_type`/`fs_path`/...,
+  so `prefix + "FS_PATH".upper()` is what produces `ETL_FS_PATH`. See
+  `sandbox/deployment_settings.py` for a worked example.
 
 A `boti-sweet-*` package should be a thin, generic composition or facade over
 these — not a parallel reimplementation. `boti-sweet-config` and
@@ -59,16 +69,34 @@ installed (`boti-sweet-config`, required; `boti-sweet-dummy`, dev-only) don't
 need this. `sandbox/` is where you actually exercise both states — run it
 after `uv sync` and again after `uv sync --extra etl`.
 
+## Client-specific config has no home in a `boti-sweet-*` package
+
+Not every env var in a real deployment's `.env` maps to something generic.
+`sandbox/deployment_settings.py` is the reference example: it builds a
+`boti_data.ConnectionCatalog` (fully generic, zero new code needed) but also
+defines a few plain `pydantic.BaseModel`s + `boti_sweet_config.load_settings`
+calls for things like a client's own upstream service URL or business-domain
+config (routing, security keys, ...) that have no generic shape to extract
+yet and no second real consumer to justify generalizing for. Don't invent a
+new `boti-sweet-*` package, or add fields to an existing one's settings
+model, just to give one client's one-off config a home — model it at the
+deployment level (sandbox, or a real deployment's own settings module)
+instead, same as this file's "generalize only once there's a second real
+consumer" rule for code.
+
 ## Commands
 
 ```bash
 uv sync                   # skeleton only: boti-sweet + boti-sweet-config
 uv sync --extra etl       # skeleton + ETL package, for clients that need it
+uv sync --extra bi        # skeleton + BI package
 uv sync --all-extras      # everything, for local development across the workspace
 
 uv run pytest
 uv run ruff check .
-uv run mypy src packages/*/src
+uv run mypy src packages/*/src sandbox
+uv run python sandbox/run.py                    # settings-only, no network calls
+uv run python sandbox/run.py --check-connectivity  # also probes real infra, opt-in
 ```
 
 # Claude Configuration Override

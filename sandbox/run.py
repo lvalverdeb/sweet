@@ -2,33 +2,49 @@
 
 Points BOTI_SWEET_CONFIG_DIR at sandbox/config/ (a stand-in for a real
 deployment's config/) instead of the repo's own config/, then prints the
-resulting settings and which optional packages are installed.
+resulting settings, installed optional packages, and this deployment's own
+connection catalog / client-specific config (see deployment_settings.py).
 
-    uv sync                # boti-sweet-dummy always comes along (dev group)
+    uv sync                     # boti-sweet-dummy always comes along (dev group)
     uv run python sandbox/run.py
 
-    uv sync --extra etl    # simulate a client that also needs ETL
+    uv sync --extra etl --extra bi   # simulate a client that needs ETL + BI
     uv run python sandbox/run.py
+
+Copy sandbox/config/.env.example to sandbox/config/.env (gitignored) and fill
+in real values to see this deployment's actual configuration resolve.
+
+By default this only constructs and validates typed config objects — no
+network calls. Pass --check-connectivity to additionally probe each
+filesystem/SQL connection (opt-in, since these can point at infrastructure
+that isn't reachable from wherever this runs).
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 
-from boti_sweet import get_settings, installed_packages
+from deployment_settings import (
+    load_etl_service_settings,
+    load_external_services_settings,
+    load_security_settings,
+)
+
+from boti_sweet import apply_tz, get_settings, installed_packages
 
 SANDBOX_CONFIG_DIR = Path(__file__).parent / "config"
+SANDBOX_ENV_FILE = SANDBOX_CONFIG_DIR / ".env"
 
 
-def main() -> None:
-    os.environ.setdefault("BOTI_SWEET_CONFIG_DIR", str(SANDBOX_CONFIG_DIR))
-
+def print_suite_settings() -> None:
     settings = get_settings()
     print(f"environment = {settings.environment!r}")
-    print(f"log_level   = {settings.log_level!r}  (staging from settings.yaml, "
-          "overridden to WARNING by .env)")
+    print(f"log_level   = {settings.log_level!r}")
 
+
+def print_installed_packages() -> None:
     packages = installed_packages()
     names = [package.name for package in packages]
     print(f"installed optional packages: {names or 'none'}")
@@ -37,6 +53,125 @@ def main() -> None:
         describe = getattr(module, "describe", None)
         if describe is not None:
             print(f"  {package.name}: {describe()}")
+
+        if package.name == "bi":
+            get_clickhouse_settings = getattr(module, "get_clickhouse_settings", None)
+            if get_clickhouse_settings is not None:
+                ch = get_clickhouse_settings()
+                print(f"  {package.name}: clickhouse host={ch.host!r} database={ch.database!r}")
+
+
+def print_connection_catalog() -> None:
+    from deployment_settings import build_connection_catalog
+
+    try:
+        catalog = build_connection_catalog(env_file=SANDBOX_ENV_FILE)
+    except ImportError:
+        print("  skipped: boti-data not installed (uv sync --extra etl to see this)")
+        return
+
+    for name in ("etl", "source", "target", "persons"):
+        try:
+            config = catalog.filesystem_config(name)
+        except KeyError:
+            continue
+        print(f"  filesystem[{name}]: type={config.fs_type} path={config.fs_path}")
+
+    for name in ("replica", "paf"):
+        try:
+            config = catalog.sql_config(name)
+        except KeyError:
+            print(f"  sql[{name}]: not configured ({name.upper()}_DB_URL not set)")
+            continue
+        print(f"  sql[{name}]: query_only={config.query_only} pool_size={config.pool_size}")
+
+
+def print_client_settings() -> None:
+    etl_service = load_etl_service_settings(env_file=SANDBOX_ENV_FILE)
+    print(
+        f"  etl service: url={etl_service.etl_service_url!r} "
+        f"grpc={etl_service.etl_grpc_server!r}"
+    )
+
+    security = load_security_settings(env_file=SANDBOX_ENV_FILE)
+    print(f"  security: environment={security.environment!r} api_key={security.api_key}")
+
+    external = load_external_services_settings(env_file=SANDBOX_ENV_FILE)
+    print(
+        f"  external services: osrm={external.osrm_service_url!r} "
+        f"ibis_ppp={external.ibis_ppp_url!r}"
+    )
+
+
+def check_connectivity() -> None:
+    """Opt-in: actually reach the configured infrastructure. Never called by default."""
+    try:
+        from deployment_settings import build_connection_catalog
+        from sqlalchemy import text
+    except ImportError:
+        print("  skipped: boti-data not installed (uv sync --extra etl to see this)")
+        return
+
+    catalog = build_connection_catalog(env_file=SANDBOX_ENV_FILE)
+
+    for name in ("etl", "source", "target", "persons"):
+        try:
+            catalog.filesystem_config(name)
+        except KeyError:
+            continue
+        try:
+            catalog.filesystem(name).ls(catalog.filesystem_config(name).fs_path, detail=False)
+        except Exception as exc:  # noqa: BLE001 - best-effort probe, report and move on
+            print(f"  filesystem[{name}]: FAILED ({exc})")
+        else:
+            print(f"  filesystem[{name}]: OK")
+
+    for name in ("replica", "paf"):
+        try:
+            catalog.sql_config(name)
+        except KeyError:
+            continue
+        try:
+            with catalog.create_sql_resource(name) as resource, resource.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except Exception as exc:  # noqa: BLE001 - best-effort probe, report and move on
+            print(f"  sql[{name}]: FAILED ({exc})")
+        else:
+            print(f"  sql[{name}]: OK")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check-connectivity",
+        action="store_true",
+        help="Also probe each configured filesystem/SQL connection (network calls).",
+    )
+    args = parser.parse_args()
+
+    os.environ.setdefault("BOTI_SWEET_CONFIG_DIR", str(SANDBOX_CONFIG_DIR))
+    apply_tz()
+    print("--- timezone ---")
+    print(
+        f"  process TZ env var = {os.environ.get('TZ')!r}  "
+        "(NOT read from sandbox/config/.env — see module docstring)"
+    )
+
+    print("--- suite settings ---")
+    print_suite_settings()
+
+    print("--- installed optional packages ---")
+    print_installed_packages()
+
+    print("--- connection catalog (settings only, no network calls) ---")
+    print_connection_catalog()
+
+    print("--- client-specific settings (sandbox/deployment_settings.py) ---")
+    print_client_settings()
+
+    if args.check_connectivity:
+        print("--- connectivity checks ---")
+        check_connectivity()
 
 
 if __name__ == "__main__":

@@ -12,4 +12,5 @@ build/
 .idea/
 CACHEDIR.TAG
 config/.env
+sandbox/config/.env
 logs/

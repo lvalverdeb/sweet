@@ -328,6 +328,16 @@ dev = [
 name = "boti-sweet-bi"
 version = "0.1.0"
 source = { editable = "packages/boti-sweet-bi" }
+dependencies = [
+    { name = "boti-sweet-config" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
+    { name = "pydantic", specifier = ">=2.11" },
+]
 
 [[package]]
 name = "boti-sweet-config"

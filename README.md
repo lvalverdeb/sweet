@@ -39,7 +39,7 @@ settings = get_settings()
 | Extra | Package | Status |
 | --- | --- | --- |
 | `etl` | [`boti-sweet-etl`](packages/boti-sweet-etl) | Facade over `boti-data`/`boti-dask` pipeline primitives. |
-| `bi` | [`boti-sweet-bi`](packages/boti-sweet-bi) | **Placeholder.** Registers into the suite so wiring (extras, registry, sandbox) works end-to-end, but has no BI runtime behind it yet. |
+| `bi` | [`boti-sweet-bi`](packages/boti-sweet-bi) | Mostly a placeholder — no BI runtime wired yet — but has one real capability: `ClickHouseSettings`. |
 
 <!-- TODO: expand this table as boti-sweet-bi grows past a stub, and add new
      rows here whenever a new optional package/extra is introduced. -->
@@ -55,13 +55,16 @@ uv sync --all-extras      # everything, for local development across the workspa
 
 ## Sandbox
 
-`sandbox/` models a client deployment locally — its own `config/` and a
-`run.py` that reports resolved settings and installed optional packages,
-without needing a real client's config or a real ETL/BI package installed.
-See `sandbox/README.md`.
+`sandbox/` models a client deployment locally — its own `config/`, a
+`deployment_settings.py` composing generic pieces (a `boti_data.
+ConnectionCatalog` for named filesystem/SQL connections) with client-specific
+config that has no home in a generic package, and a `run.py` that reports
+all of it, without needing a real client's config or a real ETL/BI package
+installed. See `sandbox/README.md`.
 
 ```bash
 uv run python sandbox/run.py
+uv run python sandbox/run.py --check-connectivity  # opt-in, reaches real infra
 ```
 
 ## Development
@@ -69,5 +72,5 @@ uv run python sandbox/run.py
 ```bash
 uv run pytest
 uv run ruff check .
-uv run mypy src packages/*/src
+uv run mypy src packages/*/src sandbox
 ```
