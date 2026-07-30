@@ -1,0 +1,3 @@
+# Pretend "client deployment" defaults — committed so the sandbox is reproducible.
+environment: staging
+log_level: DEBUG
