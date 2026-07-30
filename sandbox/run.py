@@ -84,19 +84,19 @@ def print_connection_catalog() -> None:
 
     for name in ("etl", "source", "target", "persons"):
         try:
-            config = catalog.filesystem_config(name)
+            fs_config = catalog.filesystem_config(name)
         except KeyError:
             print(f"  filesystem[{name}]: not configured (missing from datasources.yaml)")
             continue
-        print(f"  filesystem[{name}]: type={config.fs_type} path={config.fs_path}")
+        print(f"  filesystem[{name}]: type={fs_config.fs_type} path={fs_config.fs_path}")
 
     for name in ("replica", "paf"):
         try:
-            config = catalog.sql_config(name)
+            sql_config = catalog.sql_config(name)
         except KeyError:
             print(f"  sql[{name}]: not configured (missing from datasources.yaml)")
             continue
-        print(f"  sql[{name}]: query_only={config.query_only} pool_size={config.pool_size}")
+        print(f"  sql[{name}]: query_only={sql_config.query_only} pool_size={sql_config.pool_size}")
 
 
 def print_client_settings() -> None:

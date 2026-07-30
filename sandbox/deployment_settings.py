@@ -1,72 +1,34 @@
 """This specific deployment's own configuration.
 
 Everything here is client-specific wiring that has no home in a generic
-`boti-sweet-*` package — either because it's built entirely from existing
-`boti`/`boti_data` primitives (the connection catalog) or because it's this
-client's own business config with no generic shape to extract yet (ETL
-service integration, routing/geo, security). See CLAUDE.md for the
-"generalize only once there's a second real consumer" rule this follows.
+`boti-sweet-*` package — except `build_connection_catalog`, which delegates
+to `boti_sweet_etl.Datasources`: that logic was never client-specific (it
+doesn't hardcode any of this deployment's profile names), so it lives in the
+generic package, not here. What's genuinely client-specific — ETL service
+integration, routing/geo, security — has no generic shape to extract yet.
+See CLAUDE.md for the "generalize only once there's a second real consumer"
+rule this follows.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
-from boti_sweet_config import load_settings, load_yaml_defaults
-from pydantic import BaseModel, SecretStr, ValidationError
+from boti_sweet_config import load_settings
+from pydantic import BaseModel, SecretStr
 
 if TYPE_CHECKING:
-    from boti_data import ConnectionCatalog
-
-
-def _trust_endpoint(endpoint: str) -> None:
-    """Allowlist `endpoint`'s host[:port] so a private IP from trusted
-    deployment config (datasources.yaml) doesn't trip FilesystemConfig's SSRF
-    guard. Mirrors boti.core.filesystem's own (private) _allowlist_endpoint_from_url
-    — there's no public equivalent that takes a config value directly.
-    """
-    from boti.core.filesystem import add_endpoint_to_allowlist
-
-    parsed = urlparse(endpoint.strip())
-    hostname = parsed.hostname or ""
-    if not hostname:
-        return
-    key = f"{hostname}:{parsed.port}" if parsed.port else hostname
-    add_endpoint_to_allowlist(key, hostname)
+    from boti_data.connection_catalog import ConnectionCatalog
 
 
 def build_connection_catalog(*, datasources_file: str | Path) -> ConnectionCatalog:
-    # Lazy: boti-data (and its sqlalchemy/dask/pandas/polars dependency chain)
-    # only comes with the "etl" extra, which this sandbox must work without.
-    from boti.core.filesystem import FilesystemConfig
-    from boti_data import ConnectionCatalog
-    from boti_data.db.sql_config import SqlDatabaseConfig
+    # Lazy: boti-sweet-etl (and its boti-data/sqlalchemy/dask/pandas/polars
+    # dependency chain) only comes with the "etl" extra, which this sandbox
+    # must work without.
+    from boti_sweet_etl import Datasources
 
-    catalog = ConnectionCatalog()
-    data = load_yaml_defaults(datasources_file)
-
-    for name, profile in data.get("filesystems", {}).items():
-        endpoint = profile.get("fs_endpoint")
-        if endpoint:
-            _trust_endpoint(endpoint)
-        try:
-            fs_config = FilesystemConfig(**profile)
-        except ValidationError as exc:
-            raise ValueError(f"datasources.yaml: filesystems.{name} is invalid: {exc}") from exc
-        catalog.register_filesystem(name, fs_config)
-
-    sql_section = data.get("sql", {})
-    defaults = sql_section.get("defaults", {})
-    for name, profile in sql_section.get("connections", {}).items():
-        try:
-            sql_config = SqlDatabaseConfig(**{**defaults, **profile})
-        except ValidationError as exc:
-            raise ValueError(f"datasources.yaml: sql.connections.{name} is invalid: {exc}") from exc
-        catalog.register_sql(name, sql_config)
-
-    return catalog
+    return Datasources(datasources_file).catalog
 
 
 class EtlServiceSettings(BaseModel):

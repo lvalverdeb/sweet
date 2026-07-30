@@ -23,6 +23,44 @@ def build_pipeline() -> SinkPipeline:
 run_with_dask_session(build_pipeline, env_prefix="DASK_", overwrite=True)
 ```
 
+`Datasources` reads named filesystem/SQL connection profiles from a YAML
+file and constructs the real `boti.core.filesystem.FilesystemConfig` /
+`boti_data.db.sql_config.SqlDatabaseConfig` objects directly — extracting
+each profile's credentials (`fs_key`/`fs_secret`/`fs_token`,
+`connection_url`) — registered into a `boti_data.ConnectionCatalog`. Neither
+config class has YAML support itself (only env-prefix loaders), so this is
+the YAML-loading glue on top of them, not a parallel config system:
+
+```yaml
+# datasources.yaml
+filesystems:
+  source:
+    fs_type: s3
+    fs_path: s3://my-bucket/source
+    fs_key: ...
+    fs_secret: ...
+sql:
+  defaults:               # merged under each connection below
+    pool_size: 20
+  connections:
+    replica:
+      connection_url: ...
+```
+
+```python
+from boti_sweet_etl import Datasources
+
+datasources = Datasources("datasources.yaml")
+fs_config = datasources.filesystem("source")  # FilesystemConfig
+sql_config = datasources.sql("replica")       # SqlDatabaseConfig
+filesystem = datasources.catalog.filesystem("source")  # live fsspec handle
+```
+
+See `sandbox/deployment_settings.py` for a worked example, including how a
+private-IP `fs_endpoint` needs the same SSRF-allowlist trust
+`FilesystemConfig.from_env_prefix(trust_env_endpoint=True)` gives on the
+env-prefix path.
+
 Optional add-on to the `boti-sweet` suite — install with:
 
 ```bash

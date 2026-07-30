@@ -47,7 +47,8 @@ Known building blocks worth checking before writing your own:
   `"ETL_FS_"`: its fields are already named `fs_type`/`fs_path`/..., so
   `prefix + "FS_PATH".upper()` is what produces `ETL_FS_PATH`). Neither
   `FilesystemConfig` nor `SqlDatabaseConfig` has YAML support though — they're
-  plain pydantic models — so `sandbox/deployment_settings.py` instead reads a
+  plain pydantic models — so `boti_sweet_etl.Datasources`
+  (`packages/boti-sweet-etl/src/boti_sweet_etl/datasources.py`) reads a
   `datasources.yaml` (via `boti_sweet_config.load_yaml_defaults`) and
   constructs them directly (`FilesystemConfig(**profile)`), then registers
   them with `catalog.register_filesystem`/`register_sql`. A private-IP
@@ -55,7 +56,10 @@ Known building blocks worth checking before writing your own:
   `trust_env_endpoint=True` gives you on the env-prefix path — see
   `_trust_endpoint()` there, which replicates `boti.core.filesystem`'s own
   (private) URL-to-allowlist-key logic since there's no public helper that
-  takes a config value directly.
+  takes a config value directly. Import `ConnectionCatalog` from
+  `boti_data.connection_catalog` directly (not the lazy `boti_data.
+  ConnectionCatalog` top-level re-export) if you need mypy to see its real
+  method signatures — the lazy `__getattr__` re-export types as `Any`.
 - `boti.core.logger.Logger.default_logger(logger_name=...)` — the
   ecosystem's structured, queue-based, PII-redacting logger. No OTEL/OTLP
   export anywhere in `boti`/`boti_data`/`boti_dask` though (checked) — that's
@@ -86,10 +90,10 @@ after `uv sync` and again after `uv sync --extra etl`.
 ## Client-specific config has no home in a `boti-sweet-*` package
 
 Not every setting in a real deployment maps to something generic.
-`sandbox/deployment_settings.py` is the reference example: it builds a
-`boti_data.ConnectionCatalog` from `datasources.yaml` (thin glue over fully
-generic ecosystem types, see above) but also defines a few plain
-`pydantic.BaseModel`s + `boti_sweet_config.load_settings`
+`sandbox/deployment_settings.py` is the reference example: `datasources.yaml`
+loading (fully generic) now lives in `boti_sweet_etl.Datasources`, not here —
+`deployment_settings.py` just delegates to it, and otherwise defines a few
+plain `pydantic.BaseModel`s + `boti_sweet_config.load_settings`
 calls for things like a client's own upstream service URL or business-domain
 config (routing, security keys, ...) that have no generic shape to extract
 yet and no second real consumer to justify generalizing for. Don't invent a

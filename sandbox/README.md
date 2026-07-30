@@ -12,10 +12,10 @@ sandbox/
 │   ├── .env                       # your real values, gitignored
 │   ├── datasources.yaml.example   # documents filesystem/SQL profiles, committed
 │   └── datasources.yaml           # your real connection profiles, gitignored
-├── deployment_settings.py  # this "deployment"'s own config: a boti_data
-│                            # ConnectionCatalog built from datasources.yaml
-│                            # (generic) + a few ad hoc settings models loaded
-│                            # from .env (client-specific, see below)
+├── deployment_settings.py  # this "deployment"'s own config: delegates
+│                            # datasources.yaml loading to boti_sweet_etl.
+│                            # Datasources (generic) + a few ad hoc settings
+│                            # models loaded from .env (client-specific)
 └── run.py                  # prints resolved settings, installed optional
                              # packages, and this deployment's connection
                              # catalog / client-specific config
@@ -56,14 +56,14 @@ succeed, they're deployment-specific, not a `boti-sweet-etl` dependency).
 
 `deployment_settings.py` demonstrates both:
 
-- **Generic, small amount of glue**: named filesystem/SQL connection profiles
-  read from `datasources.yaml` and constructed directly as
+- **Fully generic, lives in `boti-sweet-etl` now**: `build_connection_catalog`
+  just delegates to `boti_sweet_etl.Datasources`, which reads named
+  filesystem/SQL connection profiles from `datasources.yaml` and constructs
   `boti.core.filesystem.FilesystemConfig` / `boti_data.db.sql_config.
-  SqlDatabaseConfig`, then registered into a `boti_data.ConnectionCatalog`.
-  Neither of those model classes has built-in YAML support (checked — they're
-  plain pydantic models with only env-prefix loaders), so `datasources.yaml`
-  is boti-sweet-specific glue on top of the ecosystem's own connection-profile
-  types, not something the ecosystem provides directly. See `CLAUDE.md`.
+  SqlDatabaseConfig` directly, registered into a `boti_data.ConnectionCatalog`.
+  This never hardcoded any of this deployment's profile names, so it isn't
+  sandbox-only glue — it moved to the generic package. See
+  `packages/boti-sweet-etl/README.md` and `CLAUDE.md`.
 - **Client-specific, sandbox-only**: `EtlServiceSettings`, `SecuritySettings`,
   `ExternalServicesSettings` — plain models built with
   `boti_sweet_config.load_settings()` for config that's this client's own

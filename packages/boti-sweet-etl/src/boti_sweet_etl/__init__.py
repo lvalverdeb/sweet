@@ -23,12 +23,14 @@ from boti_data import (
     register_sink,
 )
 
+from boti_sweet_etl.datasources import Datasources
 from boti_sweet_etl.runner import run_with_dask_session
 
 __all__ = [
     "CsvSink",
     "CsvSinkConfig",
     "DaskSession",
+    "Datasources",
     "JsonlSink",
     "JsonlSinkConfig",
     "ParquetSink",
