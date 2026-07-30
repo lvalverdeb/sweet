@@ -16,9 +16,11 @@ sandbox/
 │                            # datasources.yaml loading to boti_sweet_etl.
 │                            # Datasources (generic) + a few ad hoc settings
 │                            # models loaded from .env (client-specific)
-└── run.py                  # prints resolved settings, installed optional
-                             # packages, and this deployment's connection
-                             # catalog / client-specific config
+├── run.py                  # prints resolved settings, installed optional
+│                            # packages, and this deployment's connection
+│                            # catalog / client-specific config
+└── notebooks/               # Jupyter notebooks using Datasources.datacube()
+    └── datacubes.ipynb       # see notebooks/README.md
 ```
 
 Copy `sandbox/config/.env.example` to `sandbox/config/.env`, and
@@ -52,6 +54,11 @@ failures (not crashes) for infrastructure that isn't reachable from wherever
 this runs, or for DB dialects whose driver package isn't installed (e.g.
 `pymysql`/`psycopg2` — install them yourself if you need this to fully
 succeed, they're deployment-specific, not a `boti-sweet-etl` dependency).
+
+## Notebooks
+
+`notebooks/datacubes.ipynb` uses `Datasources.datacube()`/`.data_helper()`
+interactively — see `notebooks/README.md` for kernel setup.
 
 ## What's generic vs. client-specific
 
