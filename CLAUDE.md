@@ -46,6 +46,19 @@ one thing missing upstream); the latter re-exports `boti_data`'s pipeline
 primitives and `boti_dask`'s session management rather than defining its own
 extract/transform/load types.
 
+## Optional packages must not break `uv run pytest` when their extra isn't synced
+
+`testpaths` includes `packages`, so pytest always tries to collect every
+package's tests regardless of what's currently synced. A package that is a
+client-facing extra (like `boti-sweet-etl`, and any future `boti-sweet-bi`)
+must ship `packages/<name>/tests/conftest.py` with
+`pytest.importorskip("<import_name>")` so its tests skip cleanly instead of
+erroring when the extra isn't installed — see
+`packages/boti-sweet-etl/tests/conftest.py`. Packages that are always
+installed (`boti-sweet-config`, required; `boti-sweet-dummy`, dev-only) don't
+need this. `sandbox/` is where you actually exercise both states — run it
+after `uv sync` and again after `uv sync --extra etl`.
+
 ## Commands
 
 ```bash
