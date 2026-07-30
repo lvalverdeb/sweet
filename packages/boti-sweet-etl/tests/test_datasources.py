@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from boti_sweet_etl import Datasources
+from boti_sweet_etl import BaseDataCube, DataHelper, Datasources
 
 
 def _write(tmp_path: Path, content: str) -> Path:
@@ -164,3 +164,40 @@ def test_malformed_redis_profile_names_the_profile(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="redis.cache"):
         Datasources(path)
+
+
+def _write_sqlite_profile(tmp_path: Path, name: str) -> Path:
+    # query_only=False: sqlite in-memory can't enforce native read-only mode
+    # (SqlDatabaseResource's own default query_only=True fails fast on it) —
+    # sqlite is used here only because it needs no server and no extra driver
+    # dependency, keeping this test self-contained.
+    return _write(
+        tmp_path,
+        f"""
+        sql:
+          connections:
+            {name}:
+              connection_url: "sqlite:///:memory:"
+              query_only: false
+        """,
+    )
+
+
+def test_data_helper_builds_from_sql_profile(tmp_path: Path) -> None:
+    path = _write_sqlite_profile(tmp_path, "replica")
+
+    helper = Datasources(path).data_helper("replica")
+    try:
+        assert isinstance(helper, DataHelper)
+    finally:
+        helper.close()
+
+
+def test_datacube_builds_from_sql_profile(tmp_path: Path) -> None:
+    path = _write_sqlite_profile(tmp_path, "replica")
+
+    cube = Datasources(path).datacube("replica")
+    try:
+        assert isinstance(cube, BaseDataCube)
+    finally:
+        cube.close()

@@ -14,16 +14,25 @@ fs_key/fs_secret/fs_token, connection_url), and registers them into a
 Redis has no ConnectionCatalog-equivalent registry in the ecosystem (checked
 — no Redis references anywhere in boti/boti_data/boti_dask), so `RedisConfig`
 profiles are kept in a plain dict here instead.
+
+`data_helper()`/`datacube()` build a `boti_data.helper.DataHelper` /
+`boti_data.datacube.BaseDataCube` directly from a named SQL profile's
+`SqlDatabaseConfig` — `DataHelper` accepts a `SqlDatabaseConfig` (one of
+`DataGateway`'s own `BackendConfig` union members) as its `config` argument
+natively, so no adapter is needed between the two.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 from boti.core.filesystem import FilesystemConfig, add_endpoint_to_allowlist
 from boti_data.connection_catalog import ConnectionCatalog
+from boti_data.datacube import BaseDataCube
 from boti_data.db.sql_config import SqlDatabaseConfig
+from boti_data.helper import DataHelper
 from boti_sweet_config import load_yaml_defaults
 from pydantic import ValidationError
 
@@ -89,6 +98,21 @@ class Datasources:
             raise KeyError(
                 f"Unknown redis profile {name!r}. Available: {sorted(self._redis_configs)}"
             ) from exc
+
+    def data_helper(self, name: str, **gateway_kwargs: Any) -> DataHelper:
+        """A `DataHelper` wired to the named SQL profile's credentials.
+
+        `gateway_kwargs` are `boti_data.gateway.DataGateway`'s own
+        constructor kwargs (`table=`, `field_map=`, `sticky_filters=`, ...) —
+        pass `table=` for configured-mode loads, or leave unset and pass
+        `statement=`/`model=` to `DataHelper.load()` instead (structured
+        mode). See `DataGateway`'s own docstring for both.
+        """
+        return DataHelper(self.sql(name), **gateway_kwargs)
+
+    def datacube(self, name: str, **gateway_kwargs: Any) -> BaseDataCube:
+        """A `BaseDataCube` backed by the named SQL profile's credentials."""
+        return BaseDataCube.from_helper(self.data_helper(name, **gateway_kwargs))
 
     def _load(self) -> None:
         data = load_yaml_defaults(self._path)

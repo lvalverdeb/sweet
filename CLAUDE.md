@@ -60,6 +60,12 @@ Known building blocks worth checking before writing your own:
   `boti_data.connection_catalog` directly (not the lazy `boti_data.
   ConnectionCatalog` top-level re-export) if you need mypy to see its real
   method signatures — the lazy `__getattr__` re-export types as `Any`.
+  `Datasources.data_helper(name)`/`.datacube(name)` build a
+  `boti_data.helper.DataHelper`/`boti_data.datacube.BaseDataCube` directly
+  from a named SQL profile — `DataHelper` accepts a `SqlDatabaseConfig`
+  natively (one of `DataGateway`'s own `BackendConfig` union members), no
+  adapter needed. Building either eagerly creates a SQL engine (same
+  fail-fast-on-missing-driver behavior as `SqlDatabaseResource`).
 - `boti.core.logger.Logger.default_logger(logger_name=...)` — the
   ecosystem's structured, queue-based, PII-redacting logger. No OTEL/OTLP
   export anywhere in `boti`/`boti_data`/`boti_dask` though (checked) — that's

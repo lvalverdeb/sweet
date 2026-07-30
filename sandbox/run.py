@@ -182,6 +182,23 @@ def check_connectivity() -> None:
         else:
             print(f"  redis[{name}]: OK (TCP reachable, protocol not verified)")
 
+    # Building a DataHelper/BaseDataCube eagerly creates a SQL engine (fails
+    # fast if the DBAPI driver isn't installed, same as the sql[] check
+    # above), so this lives under --check-connectivity too, not the
+    # settings-only default path.
+    try:
+        datasources.sql("replica")
+    except KeyError:
+        pass
+    else:
+        try:
+            cube = datasources.datacube("replica")
+        except Exception as exc:  # noqa: BLE001 - best-effort probe, report and move on
+            print(f"  datacube[replica]: FAILED ({exc})")
+        else:
+            print(f"  datacube[replica]: OK ({type(cube).__name__} built from replica credentials)")
+            cube.close()
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

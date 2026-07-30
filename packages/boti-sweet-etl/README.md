@@ -8,8 +8,7 @@ sessions from environment configuration. `boti-sweet-etl` is a thin facade
 that re-exports both and wires a pipeline run to a managed session:
 
 ```python
-from boti_data import DataHelper
-from boti_sweet_etl import run_with_dask_session, SinkPipeline
+from boti_sweet_etl import DataHelper, run_with_dask_session, SinkPipeline
 
 
 def build_pipeline() -> SinkPipeline:
@@ -65,6 +64,21 @@ filesystem = datasources.catalog.filesystem("source")  # live fsspec handle
 `ConnectionCatalog`-equivalent registry to build on — checked, there's no
 Redis reference anywhere in `boti`/`boti_data`/`boti_dask` — so profiles are
 just kept in a plain dict on `Datasources`, not the catalog.
+
+`data_helper()`/`datacube()` build a `boti_data.helper.DataHelper` /
+`boti_data.datacube.BaseDataCube` directly from a named SQL profile —
+`DataHelper` accepts a `SqlDatabaseConfig` natively (it's one of
+`DataGateway`'s own `BackendConfig` union members), so no adapter is needed:
+
+```python
+helper = datasources.data_helper("replica")     # DataHelper
+cube = datasources.datacube("replica")          # BaseDataCube, from_helper(helper)
+df = cube.load(table="orders")                  # or pass table= to data_helper()/datacube() itself
+```
+
+Building either eagerly creates a SQL engine (fails fast if the DBAPI driver
+for that dialect isn't installed — that's a deployment concern, not a
+`boti-sweet-etl` dependency, same as the `sql()` connectivity check).
 
 See `sandbox/deployment_settings.py` for a worked example, including how a
 private-IP `fs_endpoint` needs the same SSRF-allowlist trust
