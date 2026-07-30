@@ -1,8 +1,8 @@
 """This specific deployment's own configuration.
 
 Everything here is client-specific wiring that has no home in a generic
-`boti-sweet-*` package — except `build_connection_catalog`, which delegates
-to `boti_sweet_etl.Datasources`: that logic was never client-specific (it
+`boti-sweet-*` package — except `build_datasources`, which delegates to
+`boti_sweet_etl.Datasources`: that logic was never client-specific (it
 doesn't hardcode any of this deployment's profile names), so it lives in the
 generic package, not here. What's genuinely client-specific — ETL service
 integration, routing/geo, security — has no generic shape to extract yet.
@@ -19,16 +19,16 @@ from boti_sweet_config import load_settings
 from pydantic import BaseModel, SecretStr
 
 if TYPE_CHECKING:
-    from boti_data.connection_catalog import ConnectionCatalog
+    from boti_sweet_etl import Datasources
 
 
-def build_connection_catalog(*, datasources_file: str | Path) -> ConnectionCatalog:
+def build_datasources(*, datasources_file: str | Path) -> Datasources:
     # Lazy: boti-sweet-etl (and its boti-data/sqlalchemy/dask/pandas/polars
     # dependency chain) only comes with the "etl" extra, which this sandbox
     # must work without.
     from boti_sweet_etl import Datasources
 
-    return Datasources(datasources_file).catalog
+    return Datasources(datasources_file)
 
 
 class EtlServiceSettings(BaseModel):

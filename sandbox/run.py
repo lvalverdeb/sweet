@@ -74,17 +74,17 @@ def print_installed_packages() -> None:
 
 
 def print_connection_catalog() -> None:
-    from deployment_settings import build_connection_catalog
+    from deployment_settings import build_datasources
 
     try:
-        catalog = build_connection_catalog(datasources_file=SANDBOX_DATASOURCES_FILE)
+        datasources = build_datasources(datasources_file=SANDBOX_DATASOURCES_FILE)
     except ImportError:
         print("  skipped: boti-data not installed (uv sync --extra etl to see this)")
         return
 
     for name in ("etl", "source", "target", "persons"):
         try:
-            fs_config = catalog.filesystem_config(name)
+            fs_config = datasources.filesystem(name)
         except KeyError:
             print(f"  filesystem[{name}]: not configured (missing from datasources.yaml)")
             continue
@@ -92,11 +92,22 @@ def print_connection_catalog() -> None:
 
     for name in ("replica", "paf"):
         try:
-            sql_config = catalog.sql_config(name)
+            sql_config = datasources.sql(name)
         except KeyError:
             print(f"  sql[{name}]: not configured (missing from datasources.yaml)")
             continue
         print(f"  sql[{name}]: query_only={sql_config.query_only} pool_size={sql_config.pool_size}")
+
+    for name in ("cache",):
+        try:
+            redis_config = datasources.redis(name)
+        except KeyError:
+            print(f"  redis[{name}]: not configured (missing from datasources.yaml)")
+            continue
+        print(
+            f"  redis[{name}]: host={redis_config.host} "
+            f"port={redis_config.port} db={redis_config.db}"
+        )
 
 
 def print_client_settings() -> None:
@@ -119,21 +130,22 @@ def print_client_settings() -> None:
 def check_connectivity() -> None:
     """Opt-in: actually reach the configured infrastructure. Never called by default."""
     try:
-        from deployment_settings import build_connection_catalog
+        from deployment_settings import build_datasources
         from sqlalchemy import text
     except ImportError:
         print("  skipped: boti-data not installed (uv sync --extra etl to see this)")
         return
 
-    catalog = build_connection_catalog(datasources_file=SANDBOX_DATASOURCES_FILE)
+    datasources = build_datasources(datasources_file=SANDBOX_DATASOURCES_FILE)
+    catalog = datasources.catalog
 
     for name in ("etl", "source", "target", "persons"):
         try:
-            catalog.filesystem_config(name)
+            fs_config = catalog.filesystem_config(name)
         except KeyError:
             continue
         try:
-            catalog.filesystem(name).ls(catalog.filesystem_config(name).fs_path, detail=False)
+            catalog.filesystem(name).ls(fs_config.fs_path, detail=False)
         except Exception as exc:  # noqa: BLE001 - best-effort probe, report and move on
             print(f"  filesystem[{name}]: FAILED ({exc})")
         else:
@@ -151,6 +163,24 @@ def check_connectivity() -> None:
             print(f"  sql[{name}]: FAILED ({exc})")
         else:
             print(f"  sql[{name}]: OK")
+
+    for name in ("cache",):
+        try:
+            redis_config = datasources.redis(name)
+        except KeyError:
+            continue
+        # A bare TCP reachability check — no redis client dependency added
+        # just for this opt-in probe, so it can't verify the RESP protocol
+        # or auth, only that something is listening on host:port.
+        import socket
+
+        try:
+            with socket.create_connection((redis_config.host, redis_config.port), timeout=3):
+                pass
+        except OSError as exc:
+            print(f"  redis[{name}]: FAILED ({exc})")
+        else:
+            print(f"  redis[{name}]: OK (TCP reachable, protocol not verified)")
 
 
 def main() -> None:

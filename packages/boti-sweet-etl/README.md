@@ -45,6 +45,10 @@ sql:
   connections:
     replica:
       connection_url: ...
+redis:
+  cache:
+    host: ...
+    port: 6379
 ```
 
 ```python
@@ -53,8 +57,14 @@ from boti_sweet_etl import Datasources
 datasources = Datasources("datasources.yaml")
 fs_config = datasources.filesystem("source")  # FilesystemConfig
 sql_config = datasources.sql("replica")       # SqlDatabaseConfig
+redis_config = datasources.redis("cache")     # RedisConfig
 filesystem = datasources.catalog.filesystem("source")  # live fsspec handle
 ```
+
+`RedisConfig` (`host`, `port`, `db`, `decode_responses`, `password`) has no
+`ConnectionCatalog`-equivalent registry to build on — checked, there's no
+Redis reference anywhere in `boti`/`boti_data`/`boti_dask` — so profiles are
+just kept in a plain dict on `Datasources`, not the catalog.
 
 See `sandbox/deployment_settings.py` for a worked example, including how a
 private-IP `fs_endpoint` needs the same SSRF-allowlist trust

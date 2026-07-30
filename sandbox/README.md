@@ -10,7 +10,7 @@ sandbox/
 │   ├── settings.yaml              # a pretend deployment's committed YAML defaults
 │   ├── .env.example               # documents every non-datasource key, committed
 │   ├── .env                       # your real values, gitignored
-│   ├── datasources.yaml.example   # documents filesystem/SQL profiles, committed
+│   ├── datasources.yaml.example   # documents filesystem/SQL/Redis profiles, committed
 │   └── datasources.yaml           # your real connection profiles, gitignored
 ├── deployment_settings.py  # this "deployment"'s own config: delegates
 │                            # datasources.yaml loading to boti_sweet_etl.
@@ -40,7 +40,8 @@ uv run python sandbox/run.py
 By default `run.py` only constructs and validates typed config objects — no
 network calls, and secrets print masked (`SecretStr`). Pass
 `--check-connectivity` to additionally probe each configured
-filesystem/SQL connection for real:
+filesystem/SQL/Redis connection for real (Redis gets a bare TCP reachability
+check only — no `redis` client dependency added just for this opt-in probe):
 
 ```bash
 uv run python sandbox/run.py --check-connectivity
@@ -56,13 +57,15 @@ succeed, they're deployment-specific, not a `boti-sweet-etl` dependency).
 
 `deployment_settings.py` demonstrates both:
 
-- **Fully generic, lives in `boti-sweet-etl` now**: `build_connection_catalog`
-  just delegates to `boti_sweet_etl.Datasources`, which reads named
-  filesystem/SQL connection profiles from `datasources.yaml` and constructs
-  `boti.core.filesystem.FilesystemConfig` / `boti_data.db.sql_config.
-  SqlDatabaseConfig` directly, registered into a `boti_data.ConnectionCatalog`.
-  This never hardcoded any of this deployment's profile names, so it isn't
-  sandbox-only glue — it moved to the generic package. See
+- **Fully generic, lives in `boti-sweet-etl` now**: `build_datasources` just
+  delegates to `boti_sweet_etl.Datasources`, which reads named
+  filesystem/SQL/Redis connection profiles from `datasources.yaml` and
+  constructs `boti.core.filesystem.FilesystemConfig` / `boti_data.db.
+  sql_config.SqlDatabaseConfig` / `boti_sweet_etl.RedisConfig` directly (the
+  first two registered into a `boti_data.ConnectionCatalog`; Redis has no
+  ecosystem registry to build on, so it's a plain dict). This never
+  hardcoded any of this deployment's profile names, so it isn't sandbox-only
+  glue — it moved to the generic package. See
   `packages/boti-sweet-etl/README.md` and `CLAUDE.md`.
 - **Client-specific, sandbox-only**: `EtlServiceSettings`, `SecuritySettings`,
   `ExternalServicesSettings` — plain models built with

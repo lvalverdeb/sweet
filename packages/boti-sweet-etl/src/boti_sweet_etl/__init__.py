@@ -24,6 +24,7 @@ from boti_data import (
 )
 
 from boti_sweet_etl.datasources import Datasources
+from boti_sweet_etl.redis_config import RedisConfig
 from boti_sweet_etl.runner import run_with_dask_session
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "JsonlSink",
     "JsonlSinkConfig",
     "ParquetSink",
+    "RedisConfig",
     "SinkPipeline",
     "SinkRegistry",
     "SinkWriteResult",

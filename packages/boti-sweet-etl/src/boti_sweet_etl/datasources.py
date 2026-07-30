@@ -10,6 +10,10 @@ config objects directly (extracting each profile's credentials —
 fs_key/fs_secret/fs_token, connection_url), and registers them into a
 `boti_data.ConnectionCatalog`, which already provides live-resource access
 (`.filesystem(name)`, `.create_sql_resource(name)`) beyond the raw configs.
+
+Redis has no ConnectionCatalog-equivalent registry in the ecosystem (checked
+— no Redis references anywhere in boti/boti_data/boti_dask), so `RedisConfig`
+profiles are kept in a plain dict here instead.
 """
 
 from __future__ import annotations
@@ -22,6 +26,8 @@ from boti_data.connection_catalog import ConnectionCatalog
 from boti_data.db.sql_config import SqlDatabaseConfig
 from boti_sweet_config import load_yaml_defaults
 from pydantic import ValidationError
+
+from boti_sweet_etl.redis_config import RedisConfig
 
 
 def _trust_endpoint(endpoint: str) -> None:
@@ -57,12 +63,17 @@ class Datasources:
       connections:
         replica:
           connection_url: ...
+    redis:
+      cache:
+        host: ...
+        port: 6379
     ```
     """
 
     def __init__(self, datasources_file: str | Path) -> None:
         self._path = Path(datasources_file)
         self.catalog = ConnectionCatalog()
+        self._redis_configs: dict[str, RedisConfig] = {}
         self._load()
 
     def filesystem(self, name: str) -> FilesystemConfig:
@@ -70,6 +81,14 @@ class Datasources:
 
     def sql(self, name: str) -> SqlDatabaseConfig:
         return self.catalog.sql_config(name)
+
+    def redis(self, name: str) -> RedisConfig:
+        try:
+            return self._redis_configs[name]
+        except KeyError as exc:
+            raise KeyError(
+                f"Unknown redis profile {name!r}. Available: {sorted(self._redis_configs)}"
+            ) from exc
 
     def _load(self) -> None:
         data = load_yaml_defaults(self._path)
@@ -94,3 +113,9 @@ class Datasources:
                     f"{self._path}: sql.connections.{name} is invalid: {exc}"
                 ) from exc
             self.catalog.register_sql(name, sql_config)
+
+        for name, profile in data.get("redis", {}).items():
+            try:
+                self._redis_configs[name] = RedisConfig(**profile)
+            except ValidationError as exc:
+                raise ValueError(f"{self._path}: redis.{name} is invalid: {exc}") from exc

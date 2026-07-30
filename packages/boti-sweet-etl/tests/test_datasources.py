@@ -115,3 +115,52 @@ def test_unknown_sql_connection_raises_key_error(tmp_path: Path) -> None:
 
     with pytest.raises(KeyError):
         Datasources(path).sql("replica")
+
+
+def test_redis_profile_extracts_credentials(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+        redis:
+          cache:
+            host: 10.0.0.5
+            port: 6380
+            db: 2
+            decode_responses: true
+            password: shh
+        """,
+    )
+
+    config = Datasources(path).redis("cache")
+
+    assert config.host == "10.0.0.5"
+    assert config.port == 6380
+    assert config.db == 2
+    assert config.decode_responses is True
+    assert config.password is not None
+    assert config.password.get_secret_value() == "shh"
+
+
+def test_redis_profile_defaults(tmp_path: Path) -> None:
+    path = _write(tmp_path, "redis:\n  cache:\n    host: 10.0.0.5\n")
+
+    config = Datasources(path).redis("cache")
+
+    assert config.port == 6379
+    assert config.db == 0
+    assert config.decode_responses is False
+    assert config.password is None
+
+
+def test_unknown_redis_profile_raises_key_error(tmp_path: Path) -> None:
+    path = _write(tmp_path, "redis:\n  cache: {host: 10.0.0.5}\n")
+
+    with pytest.raises(KeyError, match="other"):
+        Datasources(path).redis("other")
+
+
+def test_malformed_redis_profile_names_the_profile(tmp_path: Path) -> None:
+    path = _write(tmp_path, "redis:\n  cache: {port: 6379}\n")
+
+    with pytest.raises(ValueError, match="redis.cache"):
+        Datasources(path)
