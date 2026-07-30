@@ -74,6 +74,7 @@ def print_connection_catalog() -> None:
         try:
             config = catalog.filesystem_config(name)
         except KeyError:
+            print(f"  filesystem[{name}]: not configured ({name.upper()}_FS_PATH not set)")
             continue
         print(f"  filesystem[{name}]: type={config.fs_type} path={config.fs_path}")
 

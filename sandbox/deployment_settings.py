@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from boti.core.settings import load_dotenv_values
 from boti_sweet_config import load_settings
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, SecretStr, ValidationError
 
 if TYPE_CHECKING:
     from boti_data import ConnectionCatalog
@@ -66,7 +66,14 @@ def build_connection_catalog(*, env_file: str | Path | None = None) -> Connectio
     catalog = ConnectionCatalog()
 
     for name, prefix in FILESYSTEM_PROFILES.items():
-        catalog.load_filesystem(name, prefix, env_file=env_file, trust_env_endpoint=True)
+        # fs_path is a required field with no default: a profile with none of
+        # its {PREFIX}FS_* vars set (e.g. no sandbox/config/.env yet) raises
+        # here rather than returning an empty config, so skip it explicitly —
+        # same "not configured, move on" behavior as the SQL profiles below.
+        try:
+            catalog.load_filesystem(name, prefix, env_file=env_file, trust_env_endpoint=True)
+        except ValidationError:
+            continue
 
     for name, url_env_var in SQL_PROFILES.items():
         connection_url = _resolve_env_value(url_env_var, env_file=env_file)
