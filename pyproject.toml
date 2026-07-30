@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 etl = ["boti-sweet-etl"]
+bi = ["boti-sweet-bi"]
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
@@ -24,6 +25,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 boti-sweet-config = { workspace = true }
 boti-sweet-etl = { workspace = true }
+boti-sweet-bi = { workspace = true }
 boti-sweet-dummy = { workspace = true }
 
 [dependency-groups]

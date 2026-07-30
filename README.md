@@ -19,6 +19,7 @@ This repo is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/worksp
 └── packages/
     ├── boti-sweet-config/    # generic typed-settings base (YAML + .env + env vars)
     ├── boti-sweet-etl/       # facade over boti-data/boti-dask pipelines (optional)
+    ├── boti-sweet-bi/        # BI stub — wired in, no BI runtime yet (optional)
     └── boti-sweet-dummy/     # no-op optional package, dev-only (see sandbox/)
 ```
 
@@ -38,6 +39,7 @@ settings = get_settings()
 ```bash
 uv sync                   # skeleton only: boti-sweet + boti-sweet-config
 uv sync --extra etl       # skeleton + ETL package, for clients that need it
+uv sync --extra bi        # skeleton + BI package (stub, for now)
 uv sync --all-extras      # everything, for local development across the workspace
 ```
 

@@ -16,6 +16,7 @@ resolution-markers = [
 [manifest]
 members = [
     "boti-sweet",
+    "boti-sweet-bi",
     "boti-sweet-config",
     "boti-sweet-dummy",
     "boti-sweet-etl",
@@ -288,6 +289,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+bi = [
+    { name = "boti-sweet-bi" },
+]
 etl = [
     { name = "boti-sweet-etl" },
 ]
@@ -304,10 +308,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boti-sweet-bi", marker = "extra == 'bi'", editable = "packages/boti-sweet-bi" },
     { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
     { name = "boti-sweet-etl", marker = "extra == 'etl'", editable = "packages/boti-sweet-etl" },
 ]
-provides-extras = ["etl"]
+provides-extras = ["etl", "bi"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -318,6 +323,11 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "ruff", specifier = ">=0.11.0" },
 ]
+
+[[package]]
+name = "boti-sweet-bi"
+version = "0.1.0"
+source = { editable = "packages/boti-sweet-bi" }
 
 [[package]]
 name = "boti-sweet-config"
