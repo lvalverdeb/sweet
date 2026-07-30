@@ -47,6 +47,11 @@ Known building blocks worth checking before writing your own:
   *not* `"ETL_FS_"`: its fields are already named `fs_type`/`fs_path`/...,
   so `prefix + "FS_PATH".upper()` is what produces `ETL_FS_PATH`. See
   `sandbox/deployment_settings.py` for a worked example.
+- `boti.core.logger.Logger.default_logger(logger_name=...)` — the
+  ecosystem's structured, queue-based, PII-redacting logger. No OTEL/OTLP
+  export anywhere in `boti`/`boti_data`/`boti_dask` though (checked) — that's
+  why `boti-sweet-observability`'s OTEL settings fields are typed-shape-only,
+  with no OpenTelemetry SDK dependency added.
 
 A `boti-sweet-*` package should be a thin, generic composition or facade over
 these — not a parallel reimplementation. `boti-sweet-config` and
@@ -87,10 +92,11 @@ consumer" rule for code.
 ## Commands
 
 ```bash
-uv sync                   # skeleton only: boti-sweet + boti-sweet-config
-uv sync --extra etl       # skeleton + ETL package, for clients that need it
-uv sync --extra bi        # skeleton + BI package
-uv sync --all-extras      # everything, for local development across the workspace
+uv sync                       # skeleton only: boti-sweet + boti-sweet-config
+uv sync --extra etl           # skeleton + ETL package, for clients that need it
+uv sync --extra bi            # skeleton + BI package
+uv sync --extra observability # skeleton + observability package
+uv sync --all-extras          # everything, for local development across the workspace
 
 uv run pytest
 uv run ruff check .

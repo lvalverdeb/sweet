@@ -20,6 +20,7 @@ members = [
     "boti-sweet-config",
     "boti-sweet-dummy",
     "boti-sweet-etl",
+    "boti-sweet-observability",
 ]
 
 [[package]]
@@ -295,6 +296,9 @@ bi = [
 etl = [
     { name = "boti-sweet-etl" },
 ]
+observability = [
+    { name = "boti-sweet-observability" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -311,8 +315,9 @@ requires-dist = [
     { name = "boti-sweet-bi", marker = "extra == 'bi'", editable = "packages/boti-sweet-bi" },
     { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
     { name = "boti-sweet-etl", marker = "extra == 'etl'", editable = "packages/boti-sweet-etl" },
+    { name = "boti-sweet-observability", marker = "extra == 'observability'", editable = "packages/boti-sweet-observability" },
 ]
-provides-extras = ["etl", "bi"]
+provides-extras = ["etl", "bi", "observability"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -374,6 +379,23 @@ dependencies = [
 requires-dist = [
     { name = "boti-dask", specifier = ">=1.0.6,<2.0.0" },
     { name = "boti-data", extras = ["dataframes"], specifier = ">=1.3.2,<2.0.0" },
+]
+
+[[package]]
+name = "boti-sweet-observability"
+version = "0.1.0"
+source = { editable = "packages/boti-sweet-observability" }
+dependencies = [
+    { name = "boti" },
+    { name = "boti-sweet-config" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boti", specifier = ">=1.0.8,<2.0.0" },
+    { name = "boti-sweet-config", editable = "packages/boti-sweet-config" },
+    { name = "pydantic", specifier = ">=2.11" },
 ]
 
 [[package]]

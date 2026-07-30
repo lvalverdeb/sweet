@@ -2,7 +2,7 @@
 
 A stand-in for a client deployment of `boti-sweet`, for exercising suite
 behavior — and modeling a real client's configuration — without needing a
-real client's config or a real ETL/BI package installed.
+real client's config or a real ETL/BI/observability package installed.
 
 ```
 sandbox/
@@ -25,7 +25,7 @@ values (this file is gitignored — **never commit it**). Then:
 uv sync                          # boti-sweet-dummy is always present (workspace dev group)
 uv run python sandbox/run.py
 
-uv sync --extra etl --extra bi   # simulate a client that needs ETL + BI
+uv sync --all-extras              # simulate a client that needs ETL + BI + observability
 uv run python sandbox/run.py
 
 uv sync                          # back to skeleton-only
@@ -65,12 +65,19 @@ succeed, they're deployment-specific, not a `boti-sweet-etl` dependency).
   `CLAUDE.md`'s "client-specific config has no home in a `boti-sweet-*`
   package" section.
 
+`boti-sweet-observability` (`packages/boti-sweet-observability/`) is a real,
+if partial, package: `OO_*` settings plus `get_logger()`, a facade over
+`boti.core.logger.Logger`. Its OTEL fields (`otel_grpc_endpoint`,
+`enable_otel`, ...) are typed-settings-only — no OpenTelemetry SDK wired up,
+since nothing in `boti`/`boti_data`/`boti_dask` exports OTEL either.
+
 `boti-sweet-dummy` (`packages/boti-sweet-dummy/`) is a no-op package that
 only exists to make optional-package discovery visible without needing a
 real, heavyweight package installed — it registers itself the same way
-`boti-sweet-etl`/`boti-sweet-bi` do, via the `boti_sweet.packages`
-entry-point group. Edit `sandbox/config/settings.yaml`/`.env` to see settings
-precedence (YAML < `.env` < environment variable) for yourself.
+`boti-sweet-etl`/`boti-sweet-bi`/`boti-sweet-observability` do, via the
+`boti_sweet.packages` entry-point group. Edit
+`sandbox/config/settings.yaml`/`.env` to see settings precedence (YAML <
+`.env` < environment variable) for yourself.
 
 ## `TZ` is a special case
 

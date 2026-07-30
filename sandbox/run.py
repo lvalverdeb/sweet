@@ -8,7 +8,7 @@ connection catalog / client-specific config (see deployment_settings.py).
     uv sync                     # boti-sweet-dummy always comes along (dev group)
     uv run python sandbox/run.py
 
-    uv sync --extra etl --extra bi   # simulate a client that needs ETL + BI
+    uv sync --all-extras        # simulate a client that needs ETL + BI + observability
     uv run python sandbox/run.py
 
 Copy sandbox/config/.env.example to sandbox/config/.env (gitignored) and fill
@@ -59,6 +59,15 @@ def print_installed_packages() -> None:
             if get_clickhouse_settings is not None:
                 ch = get_clickhouse_settings()
                 print(f"  {package.name}: clickhouse host={ch.host!r} database={ch.database!r}")
+
+        if package.name == "observability":
+            get_observability_settings = getattr(module, "get_observability_settings", None)
+            if get_observability_settings is not None:
+                oo = get_observability_settings()
+                print(
+                    f"  {package.name}: logger_name={oo.logger_name!r} "
+                    f"otel_service_name={oo.otel_service_name!r}"
+                )
 
 
 def print_connection_catalog() -> None:

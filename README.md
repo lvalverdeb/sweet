@@ -20,6 +20,7 @@ This repo is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/worksp
     ├── boti-sweet-config/    # generic typed-settings base (YAML + .env + env vars)
     ├── boti-sweet-etl/       # facade over boti-data/boti-dask pipelines (optional)
     ├── boti-sweet-bi/        # BI stub — wired in, no BI runtime yet (optional)
+    ├── boti-sweet-observability/  # OO_* settings + Logger facade (optional)
     └── boti-sweet-dummy/     # no-op optional package, dev-only (see sandbox/)
 ```
 
@@ -40,17 +41,20 @@ settings = get_settings()
 | --- | --- | --- |
 | `etl` | [`boti-sweet-etl`](packages/boti-sweet-etl) | Facade over `boti-data`/`boti-dask` pipeline primitives. |
 | `bi` | [`boti-sweet-bi`](packages/boti-sweet-bi) | Mostly a placeholder — no BI runtime wired yet — but has one real capability: `ClickHouseSettings`. |
+| `observability` | [`boti-sweet-observability`](packages/boti-sweet-observability) | `get_logger()` (real facade over `boti.core.logger.Logger`); OTEL fields are typed-settings-only, no exporter wired yet. |
 
-<!-- TODO: expand this table as boti-sweet-bi grows past a stub, and add new
-     rows here whenever a new optional package/extra is introduced. -->
+<!-- TODO: expand this table as these packages grow past their current
+     capabilities, and add new rows here whenever a new optional
+     package/extra is introduced. -->
 
 ## Setup
 
 ```bash
-uv sync                   # skeleton only: boti-sweet + boti-sweet-config
-uv sync --extra etl       # skeleton + ETL package, for clients that need it
-uv sync --extra bi        # skeleton + BI package (stub, for now)
-uv sync --all-extras      # everything, for local development across the workspace
+uv sync                       # skeleton only: boti-sweet + boti-sweet-config
+uv sync --extra etl           # skeleton + ETL package, for clients that need it
+uv sync --extra bi            # skeleton + BI package
+uv sync --extra observability # skeleton + observability package
+uv sync --all-extras          # everything, for local development across the workspace
 ```
 
 ## Sandbox
