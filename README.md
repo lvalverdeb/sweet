@@ -34,6 +34,16 @@ settings = get_settings()
 [package.name for package in installed_packages()]  # e.g. ["etl"]
 ```
 
+## Optional packages
+
+| Extra | Package | Status |
+| --- | --- | --- |
+| `etl` | [`boti-sweet-etl`](packages/boti-sweet-etl) | Facade over `boti-data`/`boti-dask` pipeline primitives. |
+| `bi` | [`boti-sweet-bi`](packages/boti-sweet-bi) | **Placeholder.** Registers into the suite so wiring (extras, registry, sandbox) works end-to-end, but has no BI runtime behind it yet. |
+
+<!-- TODO: expand this table as boti-sweet-bi grows past a stub, and add new
+     rows here whenever a new optional package/extra is introduced. -->
+
 ## Setup
 
 ```bash
