@@ -33,7 +33,7 @@ filesystems:
 
 sql:
   # Shared pool tuning applied to every connection below, unless a connection
-  # overrides a key itself (e.g. a future `paf: {query_only: false}`).
+  # overrides a key itself (e.g. a future `{query_only: false}`).
   defaults:
     pool_size: 20
     max_overflow: 25
@@ -42,8 +42,6 @@ sql:
     query_only: true
   connections:
     replica:
-      connection_url:
-    paf:
       connection_url:
 
 redis:

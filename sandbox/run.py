@@ -90,7 +90,7 @@ def print_connection_catalog() -> None:
             continue
         print(f"  filesystem[{name}]: type={fs_config.fs_type} path={fs_config.fs_path}")
 
-    for name in ("replica", "paf"):
+    for name in ("replica",):
         try:
             sql_config = datasources.sql(name)
         except KeyError:
@@ -151,7 +151,7 @@ def check_connectivity() -> None:
         else:
             print(f"  filesystem[{name}]: OK")
 
-    for name in ("replica", "paf"):
+    for name in ("replica",):
         try:
             catalog.sql_config(name)
         except KeyError:

@@ -14,8 +14,25 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from boti.core.project import ProjectService
 from boti.core.settings import load_dotenv_values
 from pydantic import BaseModel, TypeAdapter, ValidationError
+
+CONFIG_DIR_ENV_VAR = "SWEET_CONFIG_DIR"
+
+
+def default_config_dir() -> Path:
+    """A deployment's config directory: `SWEET_CONFIG_DIR` if set (explicit
+    override, e.g. a sandbox or a container mount outside the project tree),
+    else `<detected project root>/config` via
+    `boti.core.project.ProjectService.detect_project_root()` — not a bare
+    `"config"` relative to whatever the current working directory happens to
+    be.
+    """
+    override = os.environ.get(CONFIG_DIR_ENV_VAR)
+    if override:
+        return Path(override)
+    return ProjectService.detect_project_root() / "config"
 
 
 def load_yaml_defaults(yaml_file: Path | str) -> dict[str, Any]:

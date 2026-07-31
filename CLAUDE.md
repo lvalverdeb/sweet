@@ -39,7 +39,8 @@ Known building blocks worth checking before writing your own:
 - `boti_data.DataGateway` / `DataHelper` — data loading (SQL, Parquet, ...).
 - `boti_data.ConnectionCatalog` — the ecosystem's mechanism for *named*
   connection profiles (e.g. a deployment with separate `source`/`target`/
-  `persons` filesystems, or a `replica`/`paf` pair of databases). Its own
+  `persons` filesystems, or multiple named SQL connections such as
+  `replica`). Its own
   `load_filesystem`/`load_sql` helpers read prefixed env vars
   (`boti.core.filesystem.FilesystemConfig.from_env_prefix` /
   `boti_data.db.sql_config.SqlDatabaseConfig.from_env_prefix` — note the

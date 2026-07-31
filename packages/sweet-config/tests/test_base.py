@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
-from sweet_config import load_settings
+from sweet_config import default_config_dir, load_settings
 
 
 class _Settings(BaseModel):
@@ -53,3 +53,21 @@ def test_missing_yaml_file_is_treated_as_no_defaults(tmp_path: Path) -> None:
     settings = load_settings(_Settings, prefix="APP_", yaml_file=tmp_path / "missing.yaml")
 
     assert settings.log_level == "INFO"
+
+
+def test_default_config_dir_uses_env_var_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SWEET_CONFIG_DIR", str(tmp_path))
+
+    assert default_config_dir() == tmp_path
+
+
+def test_default_config_dir_falls_back_to_detected_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SWEET_CONFIG_DIR", raising=False)
+    (tmp_path / "pyproject.toml").write_text("")
+    monkeypatch.chdir(tmp_path)
+
+    assert default_config_dir() == tmp_path / "config"

@@ -11,17 +11,10 @@ exporter integration to add later, once something actually consumes it.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 from pydantic import BaseModel
-from sweet_config import load_settings
+from sweet_config import default_config_dir, load_settings
 
 ENV_PREFIX = "OO_"
-
-
-def _config_dir() -> Path:
-    return Path(os.environ.get("SWEET_CONFIG_DIR", "config"))
 
 
 class ObservabilitySettings(BaseModel):
@@ -34,7 +27,7 @@ class ObservabilitySettings(BaseModel):
 
 
 def get_observability_settings() -> ObservabilitySettings:
-    config_dir = _config_dir()
+    config_dir = default_config_dir()
     return load_settings(
         ObservabilitySettings,
         prefix=ENV_PREFIX,

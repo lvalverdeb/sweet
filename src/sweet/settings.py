@@ -2,17 +2,10 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 from pydantic import BaseModel
-from sweet_config import load_settings
+from sweet_config import default_config_dir, load_settings
 
 ENV_PREFIX = "SWEET_"
-
-
-def _config_dir() -> Path:
-    return Path(os.environ.get("SWEET_CONFIG_DIR", "config"))
 
 
 class SuiteSettings(BaseModel):
@@ -23,7 +16,7 @@ class SuiteSettings(BaseModel):
 
 
 def get_settings() -> SuiteSettings:
-    config_dir = _config_dir()
+    config_dir = default_config_dir()
     return load_settings(
         SuiteSettings,
         prefix=ENV_PREFIX,

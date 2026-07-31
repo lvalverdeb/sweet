@@ -8,17 +8,10 @@ No ClickHouse client dependency is added here, only the typed settings shape.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 from pydantic import BaseModel, SecretStr
-from sweet_config import load_settings
+from sweet_config import default_config_dir, load_settings
 
 ENV_PREFIX = "CLICKHOUSE_"
-
-
-def _config_dir() -> Path:
-    return Path(os.environ.get("SWEET_CONFIG_DIR", "config"))
 
 
 class ClickHouseSettings(BaseModel):
@@ -32,7 +25,7 @@ class ClickHouseSettings(BaseModel):
 
 
 def get_clickhouse_settings() -> ClickHouseSettings:
-    config_dir = _config_dir()
+    config_dir = default_config_dir()
     return load_settings(
         ClickHouseSettings,
         prefix=ENV_PREFIX,
