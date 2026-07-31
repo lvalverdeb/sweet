@@ -15,6 +15,7 @@ config/.env
 sandbox/config/.env
 sandbox/config/datasources.yaml
 sandbox/config/bronze_jobs.yaml
+sandbox/config/silver_jobs.yaml
 sandbox/.bronze_demo_output/
 logs/
 .ipynb_checkpoints/

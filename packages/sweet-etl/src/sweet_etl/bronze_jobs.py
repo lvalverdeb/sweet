@@ -95,11 +95,10 @@ class BronzeJobs:
 
     def bronze_destination(self, name: str) -> dict[str, Any]:
         """A `ParquetSink`-compatible destination mapping for this job."""
-        job = self.job(name)
-        fs_config = self.datasources.filesystem(job.destination.filesystem_profile)
-        fs = self.datasources.catalog.filesystem(job.destination.filesystem_profile)
-        path = f"{fs_config.storage_path.rstrip('/')}/{job.destination.path.lstrip('/')}"
-        return {"parquet_storage_path": path, "fs": fs}
+        destination = self.job(name).destination
+        return self.datasources.parquet_location(
+            filesystem_profile=destination.filesystem_profile, path=destination.path
+        )
 
     def _load(self) -> None:
         data = load_yaml_defaults(self._path)

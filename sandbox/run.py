@@ -25,6 +25,7 @@ that isn't reachable from wherever this runs).
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 from pathlib import Path
 
@@ -70,6 +71,19 @@ def print_installed_packages() -> None:
                 print(
                     f"  {package.name}: logger_name={oo.logger_name!r} "
                     f"otel_service_name={oo.otel_service_name!r}"
+                )
+
+            # Bridges SuiteSettings.log_level (suite-wide, SWEET_LOG_LEVEL) into
+            # sweet_observability's Logger. sweet_observability can't read
+            # SuiteSettings itself (sweet-observability doesn't depend on sweet
+            # core), so this deployment-level composition is where the two
+            # settings sources actually meet — see get_logger()'s docstring.
+            get_logger = getattr(module, "get_logger", None)
+            if get_logger is not None:
+                logger = get_logger(log_level=get_settings().log_level)
+                print(
+                    f"  {package.name}: logger level={logging.getLevelName(logger.log_level)!r} "
+                    f"(from SuiteSettings.log_level={get_settings().log_level!r})"
                 )
 
 

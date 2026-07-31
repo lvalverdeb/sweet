@@ -114,6 +114,19 @@ class Datasources:
         """A `BaseDataCube` backed by the named SQL profile's credentials."""
         return BaseDataCube.from_helper(self.data_helper(name, **gateway_kwargs))
 
+    def parquet_location(self, *, filesystem_profile: str, path: str) -> dict[str, Any]:
+        """A `{"parquet_storage_path": ..., "fs": ...}` mapping for `path`
+        under `filesystem_profile`'s own `storage_path` root — the shape
+        `boti_data.pipelines.ParquetSink`/`boti_data.parquet.ParquetReader`
+        both accept directly. Shared by `BronzeJobs.bronze_destination()`
+        and `SilverJobs`' source/destination resolution — both name a
+        filesystem profile + sub-path, nothing more.
+        """
+        fs_config = self.filesystem(filesystem_profile)
+        fs = self.catalog.filesystem(filesystem_profile)
+        resolved_path = f"{fs_config.storage_path.rstrip('/')}/{path.lstrip('/')}"
+        return {"parquet_storage_path": resolved_path, "fs": fs}
+
     def _load(self) -> None:
         data = load_yaml_defaults(self._path)
 
