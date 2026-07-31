@@ -1,0 +1,57 @@
+# Copy to sandbox/config/bronze_jobs.yaml (gitignored) and fill in real
+# values. Placeholders only below — never commit real values here.
+#
+# Loaded by sweet_etl.BronzeJobs — field names below must match
+# sweet_etl.bronze_jobs.BronzeJobConfig/BronzeDestination's own field names.
+# `sql_profile`/`destination.filesystem_profile` reference profiles
+# registered in datasources.yaml (sql.connections / filesystems).
+#
+# This only covers source/destination parameters (table, filters, where the
+# parquet lands, partition_on, a limit for capping large tables) — it can't
+# express fix_data() (int/bool/date coercion, row exclusion, derived fields),
+# which stays Python on the BronzeCube subclass. See
+# sandbox/notebooks/datacubes.ipynb for CustomerCube/LocaliserCube/
+# ProductCube using this file.
+jobs:
+  customers:
+    sql_profile: replica
+    table: crm_clientes_archivo
+    field_map:
+      cliente_id: customer_id
+      cliente_inactivo: inactive
+      cliente_bloqueado: blocked
+      cliente_moroso: in_arrears
+    destination:
+      filesystem_profile: etl
+      path: bronze/customers
+    partition_on:
+    limit:
+
+  localiser:
+    sql_profile: replica
+    table: panel_localiser
+    destination:
+      filesystem_profile: etl
+      path: bronze/localiser
+    partition_on:
+    limit:
+
+  products:
+    sql_profile: replica
+    table: asm_tracking_productos
+    field_map:
+      cliente_id: customer_id
+      id_tipo_producto: product_type_id
+      id_track_global: global_track_id
+      lock_producto: lock_product
+      sub_estatus: sub_status
+      escaneado: scanned
+      precoordinado: precoordinated
+      fh_ultimo_movimiento: last_activity_dt
+    sticky_filters:
+      product_type_id: 1
+    destination:
+      filesystem_profile: etl
+      path: bronze/products
+    partition_on:
+    limit: 200
