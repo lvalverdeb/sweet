@@ -43,6 +43,28 @@ sql:
   connections:
     replica:
       connection_url:
+      # sweet is dask-first (BronzeCube.save_to_parquet() defaults to
+      # return_type="dask"), which means loading this profile through a real
+      # distributed cluster serializes SqlDatabaseConfig into worker task
+      # payloads. Without worker_connection_env_var set,
+      # boti_data.db.sql_config.WorkerSqlConfig ships the raw connection_url
+      # above (credentials included) to every worker and warns
+      # "Credentials may be visible in scheduler logs" at runtime. Set this
+      # to an env var name (e.g. REPLICA_DB_URL); boti_data.db.sql_engine
+      # resolves it via os.environ.get() inside the code that runs *on the
+      # worker*, not the client process building this config, so the value
+      # must exist in each worker's own environment, not just here:
+      #   - local/default DaskSession (in-process or locally-spawned
+      #     workers): they inherit this process's environment, so setting it
+      #     wherever you launch the session (shell export, .env loaded
+      #     before constructing DaskSession) is enough.
+      #   - a real distributed cluster (Kubernetes, SSH, a managed cloud
+      #     cluster): each worker runs in its own machine/pod/container, so
+      #     the env var must be provisioned there independently (e.g. a
+      #     Kubernetes Secret mounted into the *worker* pod spec, not the
+      #     client's) — boti_dask has no mechanism to forward env vars from
+      #     the client to remote workers, this is cluster/infra config.
+      worker_connection_env_var:
 
 redis:
   cache:

@@ -5,7 +5,9 @@ from typing import Any
 import fsspec
 import pandas as pd
 import pytest
+from boti_data.pipelines import ParquetSink
 from boti_data.pipelines.sinks import ParquetDestination
+from boti_data.watermark import FileWatermarkStore
 from sweet_etl import BronzeCube, Datasources
 
 
@@ -116,5 +118,183 @@ def test_save_to_parquet_partitions_when_requested(tmp_path: Path) -> None:
         cube.save_to_parquet(return_type="pandas", partition_on=["status"])
 
         assert (destination_dir / "status=active").is_dir()
+    finally:
+        cube.close()
+
+
+def _write_events_db(db_path: Path, rows: list[tuple[str]]) -> None:
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, updated_at TEXT)")
+    conn.executemany("INSERT INTO events (updated_at) VALUES (?)", rows)
+    conn.commit()
+    conn.close()
+
+
+def _write_events_profile(tmp_path: Path) -> Path:
+    db_path = tmp_path / "events.db"
+    _write_events_db(db_path, [("2026-01-01",), ("2026-01-02",)])
+
+    yaml_path = tmp_path / "datasources.yaml"
+    yaml_path.write_text(
+        "sql:\n  connections:\n    demo:\n"
+        f'      connection_url: "sqlite:///{db_path}"\n'
+        "      query_only: false\n"
+    )
+    return yaml_path
+
+
+class _EventsBronzeCube(BronzeCube):
+    @property
+    def bronze_destination(self) -> ParquetDestination:
+        return self.config["bronze_destination"]
+
+
+def _build_events_cube(tmp_path: Path, destination_dir: Path) -> _EventsBronzeCube:
+    datasources = Datasources(_write_events_profile(tmp_path))
+    helper = datasources.data_helper("demo", table="events")
+    return _EventsBronzeCube.from_helper(
+        helper,
+        bronze_destination={
+            "parquet_storage_path": str(destination_dir),
+            "fs": fsspec.filesystem("file"),
+        },
+    )
+
+
+def test_save_to_parquet_history_writes_new_partition_and_commits_watermark(
+    tmp_path: Path,
+) -> None:
+    destination_dir = tmp_path / "bronze" / "events"
+    cube = _build_events_cube(tmp_path, destination_dir)
+    store = FileWatermarkStore(str(tmp_path / "watermarks.json"))
+    try:
+        result = cube.save_to_parquet_history(
+            watermark_field="updated_at",
+            watermark_source="events",
+            watermark_store=store,
+            partition_value="2026-02-01",
+        )
+
+        assert result is not None
+        written = pd.read_parquet(destination_dir)
+        assert len(written) == 2
+        assert set(written["extracted_on"]) == {"2026-02-01"}
+        assert store.read(source="events") == "2026-01-02"
+    finally:
+        cube.close()
+
+
+def test_save_to_parquet_history_returns_none_when_no_new_rows(tmp_path: Path) -> None:
+    destination_dir = tmp_path / "bronze" / "events"
+    store = FileWatermarkStore(str(tmp_path / "watermarks.json"))
+
+    cube = _build_events_cube(tmp_path, destination_dir)
+    try:
+        cube.save_to_parquet_history(
+            watermark_field="updated_at",
+            watermark_source="events",
+            watermark_store=store,
+            partition_value="2026-02-01",
+        )
+    finally:
+        cube.close()
+
+    cube2 = _build_events_cube(tmp_path, destination_dir)
+    try:
+        result = cube2.save_to_parquet_history(
+            watermark_field="updated_at",
+            watermark_source="events",
+            watermark_store=store,
+            partition_value="2026-02-02",
+        )
+
+        assert result is None
+        assert not (destination_dir / "extracted_on=2026-02-02").exists()
+    finally:
+        cube2.close()
+
+
+def test_save_to_parquet_history_appends_across_multiple_runs(tmp_path: Path) -> None:
+    destination_dir = tmp_path / "bronze" / "events"
+    store = FileWatermarkStore(str(tmp_path / "watermarks.json"))
+
+    cube = _build_events_cube(tmp_path, destination_dir)
+    try:
+        cube.save_to_parquet_history(
+            watermark_field="updated_at",
+            watermark_source="events",
+            watermark_store=store,
+            partition_value="2026-02-01",
+        )
+    finally:
+        cube.close()
+
+    # A new row lands after the first run.
+    _write_events_db(tmp_path / "events.db", [("2026-01-03",)])
+
+    cube2 = _build_events_cube(tmp_path, destination_dir)
+    try:
+        result = cube2.save_to_parquet_history(
+            watermark_field="updated_at",
+            watermark_source="events",
+            watermark_store=store,
+            partition_value="2026-02-02",
+        )
+    finally:
+        cube2.close()
+
+    assert result is not None
+    written = pd.read_parquet(destination_dir)
+    # Both partitions survive: 2 rows from run 1, 1 new row from run 2.
+    assert len(written) == 3
+    assert set(written["extracted_on"]) == {"2026-02-01", "2026-02-02"}
+    assert store.read(source="events") == "2026-01-03"
+
+
+def test_save_to_parquet_history_raises_on_existing_partition(tmp_path: Path) -> None:
+    destination_dir = tmp_path / "bronze" / "events"
+    store = FileWatermarkStore(str(tmp_path / "watermarks.json"))
+
+    destination_dir.mkdir(parents=True)
+    (destination_dir / "extracted_on=2026-02-01").mkdir()
+
+    cube = _build_events_cube(tmp_path, destination_dir)
+    try:
+        with pytest.raises(FileExistsError, match="extracted_on=2026-02-01"):
+            cube.save_to_parquet_history(
+                watermark_field="updated_at",
+                watermark_source="events",
+                watermark_store=store,
+                partition_value="2026-02-01",
+            )
+    finally:
+        cube.close()
+
+
+def test_save_to_parquet_history_does_not_commit_watermark_when_write_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination_dir = tmp_path / "bronze" / "events"
+    store = FileWatermarkStore(str(tmp_path / "watermarks.json"))
+    cube = _build_events_cube(tmp_path, destination_dir)
+
+    def _boom(self: ParquetSink, *args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("simulated write failure")
+
+    monkeypatch.setattr(ParquetSink, "write", _boom)
+
+    try:
+        with pytest.raises(RuntimeError, match="simulated write failure"):
+            cube.save_to_parquet_history(
+                watermark_field="updated_at",
+                watermark_source="events",
+                watermark_store=store,
+                partition_value="2026-02-01",
+            )
+
+        # The load already computed the advanced watermark internally, but
+        # the write never landed — the watermark must NOT have moved, or
+        # these rows would never be re-extracted on the next run.
+        assert store.read(source="events") is None
     finally:
         cube.close()

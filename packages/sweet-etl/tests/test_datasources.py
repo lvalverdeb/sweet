@@ -201,3 +201,21 @@ def test_datacube_builds_from_sql_profile(tmp_path: Path) -> None:
         assert isinstance(cube, BaseDataCube)
     finally:
         cube.close()
+
+
+def test_watermark_store_persists_across_named_sources(tmp_path: Path) -> None:
+    watermark_dir = tmp_path / "state"
+    watermark_dir.mkdir()
+    path = _write(
+        tmp_path,
+        "filesystems:\n  etl:\n    fs_type: file\n    fs_path: " + str(watermark_dir) + "\n",
+    )
+
+    store = Datasources(path).watermark_store(filesystem_profile="etl", path="watermarks.json")
+    store.write(source="orders", value="2026-01-05")
+    store.write(source="events", value="2026-01-06")
+
+    assert (watermark_dir / "watermarks.json").is_file()
+    assert store.read(source="orders") == "2026-01-05"
+    assert store.read(source="events") == "2026-01-06"
+    assert store.read(source="unknown") is None

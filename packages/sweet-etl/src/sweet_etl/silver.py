@@ -17,6 +17,28 @@ real I/O-bound lookups fit the same protocol), which is why this overrides
 `fix_data()`/`load()` pair — `boti_data`'s own sync/async hook split maps
 directly onto bronze (sync, no CompositeTransformer) vs. silver (async,
 CompositeTransformer) here.
+
+Dask compatibility (empirically verified, not assumed from type hints —
+`boti_data.enrichment.transformers` is typed `pd.DataFrame -> pd.DataFrame`
+throughout, which understates what actually works): `RowFilter` and
+`DerivedColumn` run correctly against a `dd.DataFrame` and stay lazy
+end-to-end (`.eval()`/`.loc[mask]` both have real dask implementations).
+`Deduplicator` also produces a correct result on dask — including across
+partition boundaries, since `dd.DataFrame.drop_duplicates()` is a real
+distributed operation, not a naive per-partition one — but forces one eager
+`len(df)` call first (for its debug-log row count), so it doesn't stay
+100% lazy end-to-end. `TypeCaster` is the one genuine break: `dd.DataFrame.
+astype()` doesn't accept the `errors=` kwarg `TypeCaster.transform()` always
+passes, so any `transformers` list containing a `TypeCaster` raises
+`TypeError` immediately on a dask frame — a `boti_data` upstream gap (its
+own `DatacubeFrame`/`FrameResult` unions include `dd.DataFrame`, so this
+transformer not supporting it is a bug in that package, not a deliberate
+constraint), not something to route around by reimplementing type-casting
+here. `afix_data()` below therefore accepts dask input by default (this
+package is dask-first end to end, `boti_dask` being a foundational,
+always-installed dependency) rather than pre-emptively rejecting it; a
+`SilverCube` subclass whose `transformers` includes `TypeCaster` must pass
+`return_type="pandas"` explicitly until that upstream gap is fixed.
 """
 
 from __future__ import annotations
@@ -25,6 +47,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
+import dask.dataframe as dd
 import pandas as pd
 from boti_data.datacube import BaseDataCube
 from boti_data.enrichment import CompositeTransformer, DataFrameTransformer
@@ -76,16 +99,21 @@ class SilverCube(BaseDataCube, ABC):
     async def afix_data(self, **kwargs: Any) -> None:
         """Runs `transformers` over `self.df` via `CompositeTransformer`.
 
-        Requires `return_type="pandas"` on the load that populated `self.df`
-        — `boti_data.enrichment`'s transformers operate on `pd.DataFrame`,
-        not dask, same reason `BronzeCube.save_to_parquet()` explicitly
-        restates its own (different) `return_type` default rather than
-        relying on `DataGateway`'s.
+        Accepts `pd.DataFrame` or `dd.DataFrame` — see this module's
+        docstring for exactly which `boti_data.enrichment` transformers stay
+        lazy on dask (`RowFilter`, `DerivedColumn`, `Deduplicator`) and the
+        one that doesn't (`TypeCaster`, an upstream `boti_data` gap).
+        `pa.Table`/`pl.DataFrame` are rejected up front with a clear error —
+        `RowFilter`/`DerivedColumn`'s `.eval()` calls have no polars/arrow
+        equivalent, so running the pipeline against either would otherwise
+        fail deep inside `boti_data.enrichment` with a much less legible
+        `AttributeError`.
         """
-        if not isinstance(self.df, pd.DataFrame):
+        if not isinstance(self.df, pd.DataFrame | dd.DataFrame):
             raise TypeError(
                 f"{type(self).__name__}.afix_data() requires return_type='pandas' "
-                "(boti_data.enrichment transformers operate on pd.DataFrame); "
+                "or 'dask' (boti_data.enrichment's RowFilter/DerivedColumn call "
+                "DataFrame.eval(), which pa.Table/pl.DataFrame don't implement); "
                 f"got {type(self.df).__name__}."
             )
         pipeline = CompositeTransformer(self.transformers)
@@ -101,11 +129,14 @@ class SilverCube(BaseDataCube, ABC):
         and write it to `silver_destination`.
 
         Same `partition_on`/flat-dataset semantics as
-        `BronzeCube.save_to_parquet()`. Async, unlike `BronzeCube`'s sync
-        `save_to_parquet()` — forced by `afix_data()` needing to `await`
-        `CompositeTransformer.transform()`.
+        `BronzeCube.save_to_parquet()`, including its `return_type` default:
+        this doesn't override it, so it inherits `DataHelper`/`DataGateway`'s
+        own dask-first default rather than forcing pandas — pass
+        `return_type="pandas"` explicitly if `transformers` includes a
+        `TypeCaster` (see this module's docstring). Async, unlike
+        `BronzeCube`'s sync `save_to_parquet()` — forced by `afix_data()`
+        needing to `await` `CompositeTransformer.transform()`.
         """
-        load_options.setdefault("return_type", "pandas")
         df = await self.aload(**load_options)
         with ParquetSink(self.silver_destination, partition_on=partition_on) as sink:
             return sink.write(df)

@@ -33,6 +33,7 @@ from boti_data.connection_catalog import ConnectionCatalog
 from boti_data.datacube import BaseDataCube
 from boti_data.db.sql_config import SqlDatabaseConfig
 from boti_data.helper import DataHelper
+from boti_data.watermark import FsspecWatermarkStore
 from pydantic import ValidationError
 from sweet_config import load_yaml_defaults
 
@@ -107,6 +108,24 @@ class Datasources:
         pass `table=` for configured-mode loads, or leave unset and pass
         `statement=`/`model=` to `DataHelper.load()` instead (structured
         mode). See `DataGateway`'s own docstring for both.
+
+        `sticky_filters=` here and `filters=`/bare kwargs on `.load()`/
+        `.aload()` use `boti_data.filters`' Django-QuerySet-style lookup
+        syntax (`boti_data/filters/value_parsing.py`, checked): no suffix is
+        `exact` (e.g. `product_type_id=1`), `field__<op>` covers `gte`,
+        `lte`, `gt`, `lt`, `in`, `range`, `contains`/`icontains`,
+        `startswith`/`istartswith`, `endswith`/`iendswith`, `isnull`,
+        `regex`/`iregex`, `exact`/`iexact` — matching Django's own lookup
+        names almost verbatim — plus `not_exact`/`not_contains`/`not_in`
+        (aliases `ne`/`nin`) for negation, which Django instead expresses
+        via `.exclude()`. Date/time transforms chain the same way Django's
+        do: `field__date`, `field__year`/`__month`/`__day`/`__hour`/
+        `__minute`/`__second`/`__week_day`, and `field__date__gte=...`-style
+        3-part chains combining a transform with an operator. Only a subset
+        (`exact`, `gt`, `gte`, `lt`, `lte`, `in`, `range`, `not_exact`,
+        `not_in` — `boti_data.filters.value_parsing.pushdown_ops()`) push
+        down to the SQL/parquet layer natively; the rest are applied as a
+        residual in-memory filter after load.
         """
         return DataHelper(self.sql(name), **gateway_kwargs)
 
@@ -126,6 +145,19 @@ class Datasources:
         fs = self.catalog.filesystem(filesystem_profile)
         resolved_path = f"{fs_config.storage_path.rstrip('/')}/{path.lstrip('/')}"
         return {"parquet_storage_path": resolved_path, "fs": fs}
+
+    def watermark_store(self, *, filesystem_profile: str, path: str) -> FsspecWatermarkStore:
+        """A `boti_data.watermark.FsspecWatermarkStore` backed by a JSON file
+        at `path` under `filesystem_profile`'s own `storage_path` root — one
+        file holds every job's watermark, keyed by `source=` (see
+        `boti_data.watermark.store`'s own `_JsonWatermarkStoreBase`), so this
+        is typically constructed once and shared across `BronzeJobs` jobs,
+        not built per job.
+        """
+        fs_config = self.filesystem(filesystem_profile)
+        fs = self.catalog.filesystem(filesystem_profile)
+        resolved_path = f"{fs_config.storage_path.rstrip('/')}/{path.lstrip('/')}"
+        return FsspecWatermarkStore(fs=fs, path=resolved_path)
 
     def _load(self) -> None:
         data = load_yaml_defaults(self._path)

@@ -12,6 +12,15 @@
 # which stays Python on the BronzeCube subclass. See
 # sandbox/notebooks/datacubes.ipynb for CustomerCube/LocaliserCube/
 # ProductCube using this file.
+#
+# watermark_field/watermark_operator/watermark_initial_value (see
+# `products`, below) wire BronzeJobs.load_incremental_kwargs() — cuts the SQL
+# query down to rows newer than the last committed watermark. Requires a
+# `watermark_store=` passed to BronzeJobs() at construction time (e.g.
+# `datasources.watermark_store(filesystem_profile="etl", path="_watermarks.
+# json")`). This is EXTRACT-side only — see sweet_etl/bronze_jobs.py's own
+# module docstring for why the result still can't be fed straight into
+# BronzeCube.save_to_parquet()'s write path without data-loss risk.
 jobs:
   customers:
     sql_profile: replica
@@ -55,3 +64,11 @@ jobs:
       path: bronze/products
     partition_on:
     limit: 200
+    # last_activity_dt is field_map's *renamed* (semantic) name, not the raw
+    # fh_ultimo_movimiento DB column — DataGateway translates filters to the
+    # DB's own column names when field_map is set (see boti_data's own
+    # DataGateway docstring), so watermark_field must match field_map's
+    # right-hand side, same as everything else this job's filters reference.
+    watermark_field: last_activity_dt
+    watermark_operator: gt
+    watermark_initial_value:
