@@ -176,6 +176,164 @@ notebooks (`meta=(col, "datetime64[us, UTC]")`, and `ProductSilverCube`'s
 derived `sla_end_calc_date` the same way) — a concrete example of #2's fix
 catching a real, pre-existing bug of ours, not just the synthetic repro.
 
+## Findings from 2026-08-01, building `sweet-etl`'s `SilverCube`/`GoldCube` and running the latter against real infra (`sandbox/notebooks/dask_laziness_ctf.ipynb`, `gold_materialization.ipynb`) — all three fixed in `boti-data` 1.3.8 (2026-08-02)
+
+### 8. [Bug] [RESOLVED, verified] `TypeCaster.transform()` raises `TypeError` on any dask frame
+`boti_data.enrichment.transformers.TypeCaster.transform()` always calls
+`df.astype(applicable, errors="ignore")`. `dd.DataFrame.astype()` doesn't
+accept an `errors=` kwarg at all — so any `transformers` list containing a
+`TypeCaster` fails immediately on a `dd.DataFrame`, unconditionally,
+regardless of what columns are being cast. `RowFilter`, `DerivedColumn`,
+and `Deduplicator` (the other three `boti_data.enrichment.transformers`
+classes) were checked the same way and all three work correctly on dask —
+`Deduplicator`'s cross-partition case was specifically verified (a
+duplicate key split across two partitions was still correctly collapsed to
+one row), so this isn't a "the whole module doesn't support dask" issue,
+it's narrowly `TypeCaster`.
+
+**Evidence:** reproduced directly —
+
+```python
+>>> await TypeCaster({"amount": "float64"}).transform(a_real_dd_DataFrame)
+TypeError: FrameBase.astype() got an unexpected keyword argument 'errors'
+```
+
+— against a real `dask.dataframe.DataFrame` built via `dd.from_pandas`.
+`boti_data`'s own `DatacubeFrame`/`FrameResult` type unions already include
+`dd.DataFrame`, so this is a real gap against the package's own stated
+frame-type contract, not a case of using an unsupported type.
+
+**Impact on `sweet-etl`:** `SilverCube` (`silver.py`) now accepts
+`pd.DataFrame | dd.DataFrame` rather than pre-emptively rejecting dask (an
+earlier, overly-broad guard that also blocked the three transformers that
+work fine).
+
+**Resolved:** `boti-data` 1.3.8's `TypeCaster.transform()` now branches on
+`isinstance(df, dd.DataFrame)` — the dask path calls `df.astype(applicable)`
+(no `errors=`, since dask has no per-column partial-cast concept: a
+column's dtype must be uniform across every partition), the pandas path is
+unchanged. `DataFrameTransformer`'s protocol type hints were also corrected
+to `pd.DataFrame | dd.DataFrame` to match what was already true for the
+other three transformers. Verified in `sweet-etl` itself: the
+`return_type="pandas"` requirement is gone from `silver.py`'s docstring,
+and the test that used to prove the break
+(`test_typecaster_breaks_on_dask_return_type`) was replaced with
+`test_typecaster_now_works_on_dask_return_type`, which passes a
+`TypeCaster`-using cube straight through `return_type="dask"` and confirms
+the cast actually took effect.
+
+---
+
+### 9. [Bug] [RESOLVED, verified] period-load filters can't compare a tz-aware `Timestamp` parquet column against `boti_data`'s own filter values
+`boti_data.gateway.normalization.prepare_period_filters()` unconditionally
+truncates `start`/`end` to `pd.to_datetime(x).date()` — a bare
+`datetime.date` — before building the `__gte`/`__lte` filter dict, no
+matter what dtype the target column actually is. When that column is a
+genuine tz-aware `Timestamp` in a parquet file being read lazily (dask),
+PyArrow's filter-pushdown has no comparison kernel for `date32` against a
+tz-aware `timestamp` column, so the load raises
+`ArrowNotImplementedError`/`ArrowInvalid`. Filtering the *identical* column
+with an actual `pd.Timestamp` value (same date, correct type) succeeds.
+
+**Evidence:** reproduced directly against a real bronze parquet snapshot of
+a real table (`asm_tracking_productos`, tz-aware `last_activity_dt`):
+
+```python
+>>> await historical.aload(filters={"last_activity_dt__gte": pd.Timestamp("2023-06-01", tz="UTC")}, return_type="dask")
+# succeeds
+>>> await historical.aload(filters={"last_activity_dt__gte": datetime.date(2023, 6, 1)}, return_type="dask")
+ArrowInvalid: Cannot compare Timestamp with datetime.date. Use ts == pd.Timestamp(date) or ts.date() == date instead.
+```
+
+Since `HybridDataset.load()`/`.aload()` (and therefore any `GoldCube`) go
+through `prepare_period_filters()` internally for every period-based load,
+any deployment using a tz-aware timestamp column as `date_field` hits this
+unconditionally — there's no caller-facing option to make
+`prepare_period_filters()` preserve the original precision/tz instead of
+truncating to a bare date.
+
+**Impact on `sweet-etl`:** previously worked around by writing the
+historical (parquet) branch's date column as a plain `datetime.date`
+(`date32`, which *does* have a kernel against `datetime.date` filters)
+rather than the tz-aware dtype the source column actually has — that
+workaround is gone now (see below).
+
+**Resolved:** fixed at the parquet-filter-coercion layer, not in
+`prepare_period_filters()` itself — `prepare_period_filters()` is
+deliberately backend-agnostic (also used by SQL backends, where a bare
+date is fine) and has no schema access, whereas `boti_data.parquet.
+schema_filters.coerce_temporal_filters()` already had schema access and
+already handled the mirror-image case (date value vs. string-typed
+column, from #3's era). `boti-data` 1.3.8 adds a symmetric path there: a
+bare `datetime.date` filter value is now promoted to a `pd.Timestamp`
+matching the target column's actual tz whenever that column is a genuine
+PyArrow timestamp type. Re-verified live against the exact real table this
+gap was originally found against (`asm_tracking_productos`,
+`last_activity_dt`) — both the `.dt.date` truncation workaround in
+`gold_materialization.ipynb`'s real-infra variant and the corresponding
+note in `gold.py`'s module docstring are gone; the notebook was re-executed
+end-to-end against the real `replica` connection and matches (13,518 rows,
+100% join match rate, `.compute()` and `ParquetSink.write()` agreeing) —
+same shape of result as before the fix, now with the real tz-aware dtype
+kept intact throughout instead of truncated.
+
+---
+
+### 10. [Gap] [RESOLVED, verified] `_validate_meta_matches_real_dtypes()` (wishlist #2) doesn't catch a related dask meta-corruption pattern: all-null/edge-case columns surviving a `HybridDataset` historical+live concat
+Item #2 above (resolved in `1.3.4`) guards against meta/real dtype
+*mismatches* by sampling one real row per partition and comparing dtypes.
+It does **not** catch a related but distinct failure: when
+`HybridDataset`'s dask-level concat combines two structurally different
+lazy branches (here: a historical parquet reader with a source table's
+full raw column set, most columns entirely null in a given slice, vs. a
+live SQL branch), `dd.DataFrame._meta_nonempty`'s own synthesized
+placeholder value for at least one column becomes a raw Python sentinel
+object that PyArrow's schema inference can't recognize — surfacing as a
+raw `pyarrow.lib.ArrowInvalid: Could not convert <object object at 0x...>
+with type object: did not recognize Python value type when inferring an
+Arrow data type` at `ParquetSink.write()` time, with no `boti_data`-level
+diagnostic pointing at the cause the way #2's guard does for its own
+pattern. `.compute()` on the exact same lazy frame succeeds and returns a
+complete, correct `pd.DataFrame` throughout — the corruption is specific to
+`_meta_nonempty`, not the real data, same as #2, but a case #2's guard
+doesn't reach.
+
+**Evidence:** reproduced directly against real data — `GoldCube.
+save_to_parquet()` on a `HybridDataset` built from a real 89-column,
+mostly-null-in-slice source table failed with the raw pyarrow error above;
+the traceback shows no `_validate_meta_matches_real_dtypes()`/`ValueError`
+anywhere in the stack, confirming the existing guard didn't fire before the
+raw pyarrow failure. The identical pipeline projected down to 4 needed
+columns (`columns=[...]`) succeeded cleanly.
+
+**Impact on `sweet-etl`:** not treated as a bug to route around in
+`sweet-etl` itself — projecting a gold/mart cube's load down to the
+columns it actually needs remains correct practice for that layer
+regardless of this fix, and this cube already did that, so the gap never
+manifested here in the first place.
+
+**Resolved:** root-caused via `dask`'s own source, not guessed —
+`dask/dataframe/utils.py`'s `_scalar_from_dtype()` maps the `"O"` (object)
+dtype kind to a bare `_object = object()` sentinel specifically
+`if PANDAS_GE_300`. So on pandas>=3.0, *any* genuine object-dtype dask
+column hits this whenever `frame._meta_nonempty` needs a sample and the
+meta itself has 0 real rows (the normal case) — broader than the original
+report's framing (a single-branch struct/nested-typed parquet column
+reproduces it too, no concat required). `boti-data` 1.3.8 adds
+`_validate_meta_object_columns_are_arrow_convertible()` in
+`pipelines/sinks_common.py`, checked in `ParquetSink.write()` specifically
+(not the shared prep function `CsvSink`/`JsonlSink` also use — arrow schema
+inference is a PyArrow-only concern, and `CsvSink.write()` on the exact
+same struct-column frame that PyArrow rejects was confirmed to succeed
+fine through pandas' own `to_csv`). It tests each object-dtype column's
+`_meta_nonempty` sample against `pa.Table.from_pandas()` and raises a
+named-column `ValueError` instead of letting the raw `ArrowInvalid` escape.
+Not reported as fully "fixed" in the sense of eliminating the underlying
+wide-null-column problem — this cube already avoided it by projecting to 4
+columns, and that remains the right practice — but the failure mode is now
+a clear, actionable error rather than an opaque one whenever it does occur
+elsewhere.
+
 ## boti (core)
 
 Nothing broken surfaced this session. One thing worth noting as a positive,

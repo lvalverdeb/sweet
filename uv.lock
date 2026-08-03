@@ -426,15 +426,15 @@ wheels = [
 
 [[package]]
 name = "boti-data"
-version = "1.3.6"
+version = "1.3.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boti" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/c5/6870d2ef6db92af02e3a39ffcae6e86c2fbd95d44de416eb251a1e1b752b/boti_data-1.3.6.tar.gz", hash = "sha256:bbe51d6f73d4626e5889a25ad03d481c9b78597ea2798957e91bfadbab3271cf", size = 193771, upload-time = "2026-07-31T18:49:41.186Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/ea/c6338c97c3de80e97a6307cfa612c90bb72f64c66d0fee9f8f3e65ce8c33/boti_data-1.3.8.tar.gz", hash = "sha256:5dc928a20c5a6fcb94a378deed33f7c8e71c68655c3be4983a25e9311eda409c", size = 203552, upload-time = "2026-08-02T22:06:43.095Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/3c/876ce4729ddc1ad2fa4dcf610d40caacb0c525193fd0b0a3c64b4bc5872e/boti_data-1.3.6-py3-none-any.whl", hash = "sha256:bfb00796b368b32aea259784f6dd96b9de5a2a3502f35894afcd5b9d90388f9d", size = 219999, upload-time = "2026-07-31T18:49:42.44Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/61/c438e19a93814936bc5f2a7daf79c6905f4974e5136e53170dacb70c6c0b/boti_data-1.3.8-py3-none-any.whl", hash = "sha256:1922dd443f0351d47c51e0f0ccc2e9adfcaefc0393cd4e175cc5e427c8b65124", size = 226216, upload-time = "2026-08-02T22:06:40.996Z" },
 ]
 
 [package.optional-dependencies]
@@ -1850,7 +1850,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -2780,7 +2780,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "boti-dask", specifier = ">=1.0.6,<2.0.0" },
-    { name = "boti-data", extras = ["dataframes", "mysql", "postgres"], specifier = ">=1.3.2,<2.0.0" },
+    { name = "boti-data", extras = ["dataframes", "mysql", "postgres"], specifier = ">=1.3.8,<2.0.0" },
     { name = "sweet-config", editable = "packages/sweet-config" },
 ]
 

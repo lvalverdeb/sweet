@@ -97,20 +97,23 @@ async def test_afix_data_rejects_arrow_and_polars(tmp_path: Path) -> None:
         cube.close()
 
 
-async def test_typecaster_breaks_on_dask_return_type(tmp_path: Path) -> None:
-    """Empirically verified upstream gap (not a sweet_etl restriction):
-    dd.DataFrame.astype() doesn't accept the errors= kwarg TypeCaster.
-    transform() always passes, so any transformers list containing a
-    TypeCaster still fails on a dask frame — SilverCube no longer blocks
-    dask pre-emptively, but this specific transformer still breaks it. See
-    silver.py's module docstring."""
+async def test_typecaster_now_works_on_dask_return_type(tmp_path: Path) -> None:
+    """Regression for a fixed upstream gap: dd.DataFrame.astype() doesn't
+    accept the errors= kwarg TypeCaster.transform() used to pass
+    unconditionally, so any transformers list containing a TypeCaster raised
+    TypeError on a dask frame. Fixed in boti-data 1.3.8 (TypeCaster now
+    branches on frame type internally) — see silver.py's module docstring."""
     bronze_dir = tmp_path / "bronze" / "orders"
     _write_bronze_parquet(bronze_dir)
     silver_dir = tmp_path / "silver" / "orders"
     cube = _build_cube(bronze_dir, silver_dir)
     try:
-        with pytest.raises(TypeError, match="errors"):
-            await cube.save_to_parquet(return_type="dask")
+        result = await cube.save_to_parquet(return_type="dask")
+
+        written = pd.read_parquet(result.path)
+        assert set(written["id"]) == {1, 2}
+        assert len(written) == 2
+        assert written["amount"].dtype == "float64"
     finally:
         cube.close()
 

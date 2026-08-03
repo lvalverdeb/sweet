@@ -47,42 +47,42 @@ sync()`): both `HybridDataset.aload()` and `AsyncFrameEnricher.aenrich()` are
 already async at the primitive level, unlike `BronzeCube`'s plain
 `DataHelper.load()`, so there's no synchronous path worth adding in parallel.
 
-Two real-data gotchas (found running `GoldCube` against actual production
-tables in `sandbox/notebooks/gold_materialization.ipynb`'s real-infra
-variant, not present in that notebook's synthetic version — its date field
-was a plain string column, which sidesteps both):
+Two real-data gotchas were originally found running `GoldCube` against
+actual production tables in `sandbox/notebooks/gold_materialization.
+ipynb`'s real-infra variant (not present in that notebook's synthetic
+version — its date field was a plain string column, which sidesteps both).
+**Both fixed upstream in `boti-data` 1.3.8, re-verified live against the
+same real table/config** (that notebook no longer carries either
+workaround):
 
-1. **Genuine upstream gap**: if `HybridDataset`'s `date_field` is a
-   tz-aware `Timestamp` column, period loads can break. `boti_data.gateway.
-   normalization.prepare_period_filters` unconditionally truncates `start`/
+1. **Fixed upstream**: if `HybridDataset`'s `date_field` is a tz-aware
+   `Timestamp` column, period loads used to break — `boti_data.gateway.
+   normalization.prepare_period_filters` unconditionally truncated `start`/
    `end` to a bare `datetime.date`, and PyArrow has no comparison kernel
    between `date32` and a tz-aware `timestamp` column when filtering a lazy
-   (dask-backed) parquet read — verified directly: the identical filter
-   with a real `pd.Timestamp` value succeeds, the same filter with a
-   `datetime.date` value raises `ArrowNotImplementedError`/`ArrowInvalid`.
-   This is a `boti_data`/PyArrow limitation, not a `sweet_etl` one — the
-   workaround is on the historical (parquet) side: write that branch's
-   date column as plain `datetime.date` (`date32`, which *does* have a
-   kernel against `datetime.date` filters) before it lands in bronze
-   parquet, rather than keeping the tz-aware dtype `HybridDataset.
-   date_field` was pointed at.
-2. **Not a bug, a modeling mistake to avoid**: the `date32` workaround
-   above then makes the historical branch's date column diverge in dtype
-   from the live (SQL) branch's tz-aware `Timestamp` for that same column.
-   Combined with pulling every raw column off a wide source table (most
-   entirely null in any given slice), `HybridDataset`'s dask-level concat
-   produces per-partition metadata PyArrow can't reconcile, and
-   `ParquetSink.write()` fails with `ArrowInvalid: Could not convert
-   <object object at ...>` — a symptom of dask's own `_meta_nonempty`
-   schema-inference giving up, not real data corruption (`.compute()` on
-   the same lazy frame succeeds and returns a complete, correct
-   `pd.DataFrame` throughout). Fixed by not carrying the mistake in the
-   first place: project to only the columns the cube actually needs (a
-   gold/mart output should be a narrow, purpose-built view anyway, not a
-   copy of a wide raw table) and normalize any remaining divergent column
-   (e.g. the `date_field` from gotcha 1) in `fix_data()` — the hook that
-   exists for exactly this, run once after enrichment, before the frame
-   reaches `ParquetSink`.
+   (dask-backed) parquet read. Fixed in `boti_data.parquet.schema_filters.
+   coerce_temporal_filters()`, which now promotes a bare `date` filter
+   value to a `pd.Timestamp` matching the target column's actual tz before
+   it reaches PyArrow — no workaround needed on the historical (parquet)
+   side anymore; keep `date_field` at its real tz-aware dtype end to end.
+2. **Was a modeling mistake to avoid, not a bug** — now also has an
+   upstream diagnostic: the old dtype-divergence workaround for gotcha 1
+   (historical branch forced to `date32` while live stayed tz-aware
+   `Timestamp`), combined with pulling every raw column off a wide source
+   table (most entirely null in any given slice), could make
+   `HybridDataset`'s dask-level concat produce per-partition metadata
+   PyArrow can't reconcile, failing `ParquetSink.write()` with a bare
+   `ArrowInvalid: Could not convert <object object at ...>` — dask's own
+   `_meta_nonempty` schema-inference giving up, not real data corruption
+   (`.compute()` on the same lazy frame always succeeded). `boti-data`
+   1.3.8 adds a `ParquetSink`-specific guard (this is a PyArrow-only
+   concern; `CsvSink`/`JsonlSink` never hit it) that turns that failure
+   into a clear, named-column error instead of an opaque one. With gotcha
+   1 fixed there's no dtype divergence left to cause this here, but the
+   underlying good practice remains worth following regardless: project to
+   only the columns the cube actually needs (a gold/mart output should be
+   a narrow, purpose-built view anyway, not a copy of a wide raw table)
+   rather than relying on the guard as a substitute for that.
 """
 
 from __future__ import annotations
