@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -6,7 +7,7 @@ import pandas as pd
 import pytest
 from boti_data.pipelines.sinks import ParquetDestination
 from boti_data.watermark import FileWatermarkStore
-from sweet_etl import BronzeCube, BronzeJobs, Datasources
+from sweet_etl import BronzeCube, BronzeJobConfig, BronzeJobs, Datasources
 
 
 def _write_config(tmp_path: Path) -> tuple[Path, Path]:
@@ -256,6 +257,129 @@ def test_save_to_parquet_creates_missing_nested_directories(tmp_path: Path) -> N
         assert pd.read_parquet(result.path).shape[0] == 3
     finally:
         cube.close()
+
+
+def _base_job_kwargs() -> dict[str, Any]:
+    return {
+        "sql_profile": "demo",
+        "table": "orders",
+        "destination": {"filesystem_profile": "etl", "path": "orders"},
+    }
+
+
+def test_job_config_rejects_both_watermark_field_and_refresh() -> None:
+    with pytest.raises(ValueError, match="not both"):
+        BronzeJobConfig(
+            **_base_job_kwargs(),
+            watermark_field="updated_at",
+            refresh="today",
+            refresh_field="updated_at",
+        )
+
+
+def test_job_config_requires_refresh_field_alongside_refresh() -> None:
+    with pytest.raises(ValueError, match="refresh_field"):
+        BronzeJobConfig(**_base_job_kwargs(), refresh="today")
+
+
+def test_job_config_requires_refresh_alongside_refresh_field() -> None:
+    with pytest.raises(ValueError, match="refresh_field"):
+        BronzeJobConfig(**_base_job_kwargs(), refresh_field="updated_at")
+
+
+def _write_refresh_config(tmp_path: Path) -> tuple[Path, Path]:
+    db_path = tmp_path / "events.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, updated_at TEXT)")
+    conn.executemany(
+        "INSERT INTO events (updated_at) VALUES (?)",
+        # 2025-12-20 predates the "current month" window used below
+        # ("today" = 2026-01-20); the other two fall inside it. Refresh
+        # presets are open-ended lower bounds ("this month through now"),
+        # not closed windows, so no row dated after "today" is included
+        # here -- that would be a future-dated row, not a realistic case.
+        [("2025-12-20",), ("2026-01-05",), ("2026-01-15",)],
+    )
+    conn.commit()
+    conn.close()
+
+    bronze_dir = tmp_path / "bronze"
+    bronze_dir.mkdir()
+
+    datasources_path = tmp_path / "datasources.yaml"
+    datasources_path.write_text(
+        "filesystems:\n"
+        "  etl:\n"
+        "    fs_type: file\n"
+        f"    fs_path: {bronze_dir}\n"
+        "sql:\n"
+        "  connections:\n"
+        "    demo:\n"
+        f'      connection_url: "sqlite:///{db_path}"\n'
+        "      query_only: false\n"
+    )
+
+    jobs_path = tmp_path / "bronze_jobs.yaml"
+    jobs_path.write_text(
+        "jobs:\n"
+        "  events:\n"
+        "    sql_profile: demo\n"
+        "    table: events\n"
+        "    columns: [updated_at]\n"
+        "    limit: 100\n"
+        "    refresh: current_month\n"
+        "    refresh_field: updated_at\n"
+        "    destination:\n"
+        "      filesystem_profile: etl\n"
+        "      path: events\n"
+        "  no_refresh:\n"
+        "    sql_profile: demo\n"
+        "    table: events\n"
+        "    destination:\n"
+        "      filesystem_profile: etl\n"
+        "      path: no_refresh\n"
+    )
+    return datasources_path, jobs_path
+
+
+def test_load_kwargs_resolves_columns_limit_and_refresh_filter(tmp_path: Path) -> None:
+    datasources_path, jobs_path = _write_refresh_config(tmp_path)
+    jobs = BronzeJobs(jobs_path, Datasources(datasources_path))
+
+    kwargs = jobs.load_kwargs("events", today=datetime.date(2026, 1, 20))
+
+    assert kwargs == {
+        "columns": ["updated_at"],
+        "limit": 100,
+        "filters": {"updated_at__gte": "2026-01-01"},
+    }
+
+
+def test_load_kwargs_is_empty_for_a_job_with_no_refresh_columns_or_limit(
+    tmp_path: Path,
+) -> None:
+    datasources_path, jobs_path = _write_refresh_config(tmp_path)
+    jobs = BronzeJobs(jobs_path, Datasources(datasources_path))
+
+    assert jobs.load_kwargs("no_refresh") == {}
+
+
+def test_refresh_filter_only_returns_rows_within_the_calendar_window(tmp_path: Path) -> None:
+    datasources_path, jobs_path = _write_refresh_config(tmp_path)
+    datasources = Datasources(datasources_path)
+    jobs = BronzeJobs(jobs_path, datasources)
+
+    helper = datasources.data_helper("demo", **jobs.data_helper_kwargs("events"))
+    try:
+        # "Today" is 2026-01-20 -> current_month window is >= 2026-01-01, so
+        # the December row is excluded and only the two January rows return.
+        df = helper.load(
+            **jobs.load_kwargs("events", today=datetime.date(2026, 1, 20)),
+            return_type="pandas",
+        )
+        assert sorted(df["updated_at"]) == ["2026-01-05", "2026-01-15"]
+    finally:
+        helper.close()
 
 
 def test_build_and_write_bronze_cube_from_job_config(tmp_path: Path) -> None:

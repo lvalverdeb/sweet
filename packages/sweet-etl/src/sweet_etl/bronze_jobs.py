@@ -60,18 +60,47 @@ constraint: it's an append *log* (an updated row reappears in a later
 partition rather than replacing itself in place — only a downstream
 latest-per-key pass collapses that), and there's no clean way to redo a
 failed partition — delete it by hand and rerun.
+
+`columns` projects a job's load to just the fields it actually needs — do
+this deliberately for any wide source table; pulling every raw column risks
+the dask meta/schema issues documented in `sweet_etl/gold.py`'s module
+docstring. It's a load-time parameter (`DataGateway.load(columns=...)`),
+unlike `table`/`field_map`/`sticky_filters`, which bind at `DataHelper`
+*construction* time — see `data_helper_kwargs()` vs. `load_kwargs()` below.
+
+`refresh`/`refresh_field` (`sweet_etl.refresh_presets`) are a second,
+*stateless* extraction strategy, alongside — never combined with, see
+`BronzeJobConfig`'s own validator — `watermark_field`'s *stateful* one: a
+named calendar-relative window (`"today"`/`"current_week"`/
+`"current_month"`/`"ytd"`/`"itd"`) recomputed fresh from the real current
+date on every run, rather than a persisted "last extracted value" advanced
+through a `WatermarkStore`. Resolved via `load_kwargs()`, which — like
+`load_incremental_kwargs()` — is a separate call from `data_helper_kwargs()`
+(construction-time) since `columns`/`limit`/a resolved `refresh` filter are
+all load-time parameters. `load_kwargs()`'s own `period=` argument overrides
+a job's configured `refresh` preset for one call — the hook
+`sweet_etl.extract_runner.run_bronze_fleet()` uses to apply a single preset
+across every `refresh_field`-configured job in a fleet run, without editing
+`bronze_jobs.yaml` itself.
+
+This module has no fleet-level "run every configured job" entry point —
+`BronzeJobs` only holds per-job config and per-job accessors, on purpose
+(same one-thing-per-module split as the rest of this package). See
+`sweet_etl.extract_runner` for that.
 """
 
 from __future__ import annotations
 
+import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from boti_data.watermark import WatermarkStore
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
 from sweet_config import load_yaml_defaults
 
 from sweet_etl.datasources import Datasources
+from sweet_etl.refresh_presets import RefreshPreset, resolve_refresh_filter
 
 
 class BronzeDestination(BaseModel):
@@ -93,14 +122,29 @@ class BronzeJobConfig(BaseModel):
     table: str
     field_map: dict[str, str] | None = None
     sticky_filters: dict[str, Any] | None = None
+    columns: list[str] | None = None
     destination: BronzeDestination
     partition_on: list[str] | None = None
     limit: int | None = None
     watermark_field: str | None = None
     watermark_operator: Literal["gt", "gte"] = "gt"
     watermark_initial_value: Any | None = None
+    refresh: RefreshPreset | None = None
+    refresh_field: str | None = None
     materialization: Literal["full", "history"] = "full"
     history_partition_field: str = "extracted_on"
+
+    @model_validator(mode="after")
+    def _validate_extraction_strategy(self) -> BronzeJobConfig:
+        if self.watermark_field is not None and self.refresh is not None:
+            raise ValueError(
+                "watermark_field and refresh are two different extraction strategies "
+                "(stateful incremental vs. stateless calendar-relative window) — "
+                "configure at most one, not both."
+            )
+        if (self.refresh is None) != (self.refresh_field is None):
+            raise ValueError("refresh and refresh_field must be set together, or not at all.")
+        return self
 
 
 class BronzeJobs:
@@ -141,6 +185,12 @@ class BronzeJobs:
             raise KeyError(
                 f"Unknown bronze job {name!r}. Available: {sorted(self._jobs)}"
             ) from exc
+
+    def job_names(self) -> list[str]:
+        """Every configured job name, in `bronze_jobs.yaml`'s own order —
+        the whitelist `sweet_etl.extract_runner.run_bronze_fleet()` iterates
+        by default."""
+        return list(self._jobs)
 
     def data_helper_kwargs(self, name: str) -> dict[str, Any]:
         """`Datasources.data_helper()`'s own kwargs for this job's source."""
@@ -190,6 +240,45 @@ class BronzeJobs:
             "operator": job.watermark_operator,
             "initial_value": job.watermark_initial_value,
         }
+
+    def load_kwargs(
+        self,
+        name: str,
+        *,
+        today: datetime.date | None = None,
+        period: RefreshPreset | None = None,
+    ) -> dict[str, Any]:
+        """Load-time kwargs (`columns`/`limit`/a resolved refresh filter)
+        for this job's `save_to_parquet()` call — a separate call from
+        `data_helper_kwargs()` (construction-time `table`/`field_map`/
+        `sticky_filters`) and `load_incremental_kwargs()` (the stateful
+        watermark strategy): `helper = datasources.data_helper(job.
+        sql_profile, **jobs.data_helper_kwargs(name)); cube.save_to_parquet(
+        **jobs.load_kwargs(name))`.
+
+        `today` defaults to the real current date; pass it explicitly for a
+        deterministic test of a `refresh`-configured job.
+
+        `period`, if given, *overrides* the job's own configured `refresh`
+        preset for this call only (`sweet_etl.extract_runner.
+        run_bronze_fleet()`'s own `period=` argument feeds this, to apply
+        one preset across an entire fleet run) — but only for a job that
+        already has `refresh_field` configured; a job with no `refresh_field`
+        (watermark-based, or unfiltered "full" reload) has nothing for a
+        date-window preset to filter on, so `period` has no effect on it.
+        """
+        job = self.job(name)
+        kwargs: dict[str, Any] = {}
+        if job.columns:
+            kwargs["columns"] = job.columns
+        if job.limit:
+            kwargs["limit"] = job.limit
+        effective_preset = period if period is not None else job.refresh
+        if effective_preset is not None and job.refresh_field is not None:
+            kwargs["filters"] = resolve_refresh_filter(
+                effective_preset, field=job.refresh_field, today=today
+            )
+        return kwargs
 
     def _load(self) -> None:
         data = load_yaml_defaults(self._path)

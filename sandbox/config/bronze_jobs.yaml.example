@@ -13,14 +13,32 @@
 # sandbox/notebooks/datacubes.ipynb for CustomerCube/LocaliserCube/
 # ProductCube using this file.
 #
-# watermark_field/watermark_operator/watermark_initial_value (see
-# `products`, below) wire BronzeJobs.load_incremental_kwargs() — cuts the SQL
-# query down to rows newer than the last committed watermark. Requires a
-# `watermark_store=` passed to BronzeJobs() at construction time (e.g.
-# `datasources.watermark_store(filesystem_profile="etl", path="_watermarks.
-# json")`). This is EXTRACT-side only — see sweet_etl/bronze_jobs.py's own
-# module docstring for why the result still can't be fed straight into
-# BronzeCube.save_to_parquet()'s write path without data-loss risk.
+# `columns` (see `customers`, below) projects a job's load to just the
+# fields it actually needs — deliberate for any wide source table; pulling
+# every raw column risks the dask meta/schema issues documented in
+# sweet_etl/gold.py's module docstring.
+#
+# Two mutually exclusive extraction strategies (BronzeJobConfig rejects a
+# job that sets both):
+#
+# - watermark_field/watermark_operator/watermark_initial_value (see
+#   `products`, below) wire BronzeJobs.load_incremental_kwargs() — *stateful*:
+#   cuts the SQL query down to rows newer than the last committed watermark.
+#   Requires a `watermark_store=` passed to BronzeJobs() at construction time
+#   (e.g. `datasources.watermark_store(filesystem_profile="etl",
+#   path="_watermarks.json")`). This is EXTRACT-side only — see
+#   sweet_etl/bronze_jobs.py's own module docstring for why the result still
+#   can't be fed straight into BronzeCube.save_to_parquet()'s write path
+#   without data-loss risk.
+# - refresh/refresh_field (see `localiser`, below) wire BronzeJobs.
+#   load_kwargs() — *stateless*: a named calendar-relative window
+#   ("today"/"current_week"/"current_month"/"ytd"/"itd", see
+#   sweet_etl.refresh_presets) recomputed fresh from the real current date on
+#   every run, no watermark store involved. Right for "refresh this month's
+#   data every run" jobs where re-pulling the same rows repeatedly is fine
+#   (or even desired, e.g. to pick up in-place updates a pure watermark would
+#   miss) — wrong for a large table where only genuinely-new rows should ever
+#   be re-queried.
 jobs:
   customers:
     sql_profile: replica
@@ -30,6 +48,7 @@ jobs:
       cliente_inactivo: inactive
       cliente_bloqueado: blocked
       cliente_moroso: in_arrears
+    columns: [customer_id, inactive, blocked, in_arrears]
     destination:
       filesystem_profile: etl
       path: bronze/customers
@@ -44,6 +63,11 @@ jobs:
       path: bronze/localiser
     partition_on:
     limit:
+    # last_visited_at is this table's own real column name (no field_map
+    # renames it) — refresh_field must match whatever name the filter
+    # actually runs against, same rule as watermark_field.
+    refresh: current_month
+    refresh_field: last_visited_at
 
   products:
     sql_profile: replica

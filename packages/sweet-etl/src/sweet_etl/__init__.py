@@ -28,8 +28,15 @@ from boti_data.helper import DataHelper
 from sweet_etl.bronze import BronzeCube
 from sweet_etl.bronze_jobs import BronzeDestination, BronzeJobConfig, BronzeJobs
 from sweet_etl.datasources import Datasources
+from sweet_etl.extract_runner import (
+    FleetRunResult,
+    JobRunResult,
+    redo_partition,
+    run_bronze_fleet,
+)
 from sweet_etl.gold import GoldCube
 from sweet_etl.redis_config import RedisConfig
+from sweet_etl.refresh_presets import RefreshPreset, resolve_refresh_filter
 from sweet_etl.runner import run_with_dask_session
 from sweet_etl.silver import SilverCube
 from sweet_etl.silver_jobs import SilverJobConfig, SilverJobs
@@ -45,11 +52,14 @@ __all__ = [
     "DaskSession",
     "DataHelper",
     "Datasources",
+    "FleetRunResult",
     "GoldCube",
+    "JobRunResult",
     "JsonlSink",
     "JsonlSinkConfig",
     "ParquetSink",
     "RedisConfig",
+    "RefreshPreset",
     "SilverCube",
     "SilverJobConfig",
     "SilverJobs",
@@ -59,6 +69,9 @@ __all__ = [
     "available_sinks",
     "create_sink",
     "dask_session_from_env_prefix",
+    "redo_partition",
     "register_sink",
+    "resolve_refresh_filter",
+    "run_bronze_fleet",
     "run_with_dask_session",
 ]
